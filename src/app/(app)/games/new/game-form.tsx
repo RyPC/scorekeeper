@@ -2,6 +2,7 @@
 
 import { addGame } from "@/app/actions/games";
 import { UserAvatar } from "@/components/UserAvatar";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -25,6 +26,14 @@ export function GameForm({
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+
+  const canSubmit = sports.length > 0 && opponents.length > 0;
+  const blockReason =
+    sports.length === 0
+      ? "no-sports"
+      : opponents.length === 0
+        ? "no-opponents"
+        : null;
 
   async function handleSubmit(formData: FormData) {
     setError(null);
@@ -50,6 +59,13 @@ export function GameForm({
       action={handleSubmit}
       className="flex flex-col gap-4 rounded-xl border border-white/10 bg-card p-4"
     >
+      <p className="rounded-lg border border-white/10 bg-background/60 px-3 py-2.5 text-xs leading-relaxed text-muted">
+        <span className="font-medium text-foreground">Opponent</span> is anyone with a
+        profile here. <span className="font-medium text-foreground">Friends</span> only
+        affect your dashboard highlights—you can still log games against people you
+        haven&apos;t added.
+      </p>
+
       <div>
         <label htmlFor="sport_id" className="text-xs font-medium text-muted">
           Sport
@@ -59,7 +75,8 @@ export function GameForm({
           name="sport_id"
           required
           defaultValue={initialSportId ?? ""}
-          className="mt-1 w-full rounded-lg border border-white/10 bg-background px-3 py-2.5 text-sm text-foreground outline-none ring-primary/40 focus:ring-2"
+          disabled={sports.length === 0}
+          className="mt-1 w-full rounded-lg border border-white/10 bg-background px-3 py-2.5 text-sm text-foreground outline-none ring-primary/40 focus:ring-2 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <option value="" disabled>
             Select sport
@@ -80,7 +97,8 @@ export function GameForm({
           id="opponent_id"
           name="opponent_id"
           required
-          className="mt-1 w-full rounded-lg border border-white/10 bg-background px-3 py-2.5 text-sm text-foreground outline-none ring-primary/40 focus:ring-2"
+          disabled={opponents.length === 0}
+          className="mt-1 w-full rounded-lg border border-white/10 bg-background px-3 py-2.5 text-sm text-foreground outline-none ring-primary/40 focus:ring-2 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <option value="" disabled>
             Select opponent
@@ -93,8 +111,9 @@ export function GameForm({
         </select>
         {opponents.length === 0 ? (
           <p className="mt-2 text-xs text-muted">
-            No other users yet. Ask someone else to create an account on this app,
-            or sign out and add another profile.
+            No other users yet. Ask someone else to open this app and tap{" "}
+            <span className="text-foreground">Add new user</span> on the sign-in screen,
+            or sign out and create another profile yourself.
           </p>
         ) : null}
       </div>
@@ -108,6 +127,10 @@ export function GameForm({
             id="my_score"
             name="my_score"
             type="number"
+            inputMode="numeric"
+            autoComplete="off"
+            min={0}
+            step={1}
             required
             className="mt-1 w-full rounded-lg border border-white/10 bg-background px-3 py-2.5 text-sm tabular-nums text-foreground outline-none ring-primary/40 focus:ring-2"
           />
@@ -120,6 +143,10 @@ export function GameForm({
             id="their_score"
             name="their_score"
             type="number"
+            inputMode="numeric"
+            autoComplete="off"
+            min={0}
+            step={1}
             required
             className="mt-1 w-full rounded-lg border border-white/10 bg-background px-3 py-2.5 text-sm tabular-nums text-foreground outline-none ring-primary/40 focus:ring-2"
           />
@@ -141,10 +168,47 @@ export function GameForm({
 
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
 
+      {blockReason ? (
+        <div
+          className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-foreground"
+          role="status"
+        >
+          {blockReason === "no-sports" ? (
+            <>
+              <p className="font-semibold">Add a sport first</p>
+              <p className="mt-1 text-muted">
+                Create one on Home, then come back here to log a result.
+              </p>
+              <Link
+                href="/dashboard"
+                className="mt-3 inline-flex min-h-[44px] items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-[#121212] hover:bg-primary-hover"
+              >
+                Go to Home
+              </Link>
+            </>
+          ) : (
+            <>
+              <p className="font-semibold">You need at least one other person</p>
+              <p className="mt-1 text-muted">
+                Someone else must create a profile on the sign-in screen before you can
+                pick an opponent.
+              </p>
+              <p className="mt-2 text-xs text-muted">
+                Optional: add them on{" "}
+                <Link href="/friends" className="text-primary underline underline-offset-2">
+                  Friends
+                </Link>{" "}
+                for dashboard shortcuts.
+              </p>
+            </>
+          )}
+        </div>
+      ) : null}
+
       <button
         type="submit"
-        disabled={pending || opponents.length === 0 || sports.length === 0}
-        className="rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-[#121212] hover:bg-primary-hover disabled:opacity-50"
+        disabled={pending || !canSubmit}
+        className="min-h-[48px] rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-[#121212] hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
       >
         {pending ? "Logging…" : "Log game"}
       </button>

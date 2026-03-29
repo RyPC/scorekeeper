@@ -23,10 +23,10 @@ export function AppShell({
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">
-      <header className="sticky top-0 z-10 border-b border-white/10 bg-background/95 backdrop-blur">
-        <div className="mx-auto flex max-w-lg flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
+      <header className="sticky top-0 z-10 border-b border-white/10 bg-background/95 pt-[env(safe-area-inset-top)] backdrop-blur">
+        <div className="mx-auto flex max-w-lg flex-wrap items-center gap-x-2 gap-y-2 px-4 py-3 sm:gap-x-3">
           <UserMenu user={user} />
-          <nav className="flex min-w-0 flex-1 flex-wrap justify-end gap-1 text-xs sm:text-sm">
+          <nav className="flex min-w-0 flex-1 flex-wrap justify-end gap-1 text-sm">
             {nav.map((item) => {
               const active =
                 item.href === "/dashboard"
@@ -36,7 +36,7 @@ export function AppShell({
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`rounded-lg px-2 py-1.5 font-medium transition sm:px-3 ${
+                  className={`inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg px-2.5 py-2 font-medium transition sm:px-3 ${
                     active
                       ? "bg-primary/20 text-primary"
                       : "text-muted hover:bg-white/5 hover:text-foreground"

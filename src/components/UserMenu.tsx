@@ -36,7 +36,7 @@ export function UserMenu({ user }: { user: UserMenuUser }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex max-w-[min(100vw-2rem,14rem)] items-center gap-2 rounded-xl border border-white/10 bg-card py-1 pl-1 pr-2 text-left transition hover:border-primary/40 hover:bg-white/[0.04] active:scale-[0.99]"
+        className="flex min-h-[44px] max-w-[min(100vw-2rem,14rem)] items-center gap-2 rounded-xl border border-white/10 bg-card py-1 pl-1 pr-2 text-left transition hover:border-primary/40 hover:bg-white/[0.04] active:scale-[0.99]"
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label={`Account menu for ${user.username}`}

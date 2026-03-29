@@ -16,13 +16,17 @@ export function LoginScreen({ users }: { users: UserRow[] }) {
   const [createState, createAction] = useActionState(createUser, null);
 
   return (
-    <div className="flex min-h-dvh flex-col bg-background px-4 py-8">
+    <div className="flex min-h-dvh flex-col bg-background px-4 pb-8 pt-[max(2rem,env(safe-area-inset-top))]">
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col">
         <header className="mb-8 text-center">
           <h1 className="text-3xl font-semibold tracking-tight text-foreground">
             ScoreKeeper
           </h1>
           <p className="mt-2 text-sm text-muted">Choose who is playing</p>
+          <p className="mx-auto mt-3 max-w-sm text-xs leading-relaxed text-muted">
+            No password—tapping a name signs you in on this device. Fine for friends;
+            don&apos;t use it for anything that needs strong proof of identity.
+          </p>
         </header>
 
         <ul className="flex flex-1 flex-col gap-3">
