@@ -10,7 +10,13 @@ export type UserMenuUser = {
   avatar_url: string | null;
 };
 
-export function UserMenu({ user }: { user: UserMenuUser }) {
+export function UserMenu({
+  user,
+  compact = false,
+}: {
+  user: UserMenuUser;
+  compact?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -36,7 +42,11 @@ export function UserMenu({ user }: { user: UserMenuUser }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex min-h-[44px] max-w-[min(100vw-2rem,14rem)] items-center gap-2 rounded-xl border border-white/10 bg-card py-1 pl-1 pr-2 text-left transition hover:border-primary/40 hover:bg-white/[0.04] active:scale-[0.99]"
+        className={
+          compact
+            ? "flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-white/10 bg-card p-1 transition hover:border-primary/40 hover:bg-white/[0.04] active:scale-[0.99]"
+            : "flex min-h-[44px] max-w-[min(100vw-2rem,14rem)] items-center gap-2 rounded-xl border border-white/10 bg-card py-1 pl-1 pr-2 text-left transition hover:border-primary/40 hover:bg-white/[0.04] active:scale-[0.99]"
+        }
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label={`Account menu for ${user.username}`}
@@ -46,15 +56,23 @@ export function UserMenu({ user }: { user: UserMenuUser }) {
           avatarUrl={user.avatar_url}
           size="sm"
         />
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-          {user.username}
-        </span>
-        <ChevronIcon open={open} />
+        {compact ? null : (
+          <>
+            <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+              {user.username}
+            </span>
+            <ChevronIcon open={open} />
+          </>
+        )}
       </button>
 
       {open ? (
         <div
-          className="absolute left-0 top-[calc(100%+6px)] z-50 w-[min(calc(100vw-2rem),16rem)] rounded-xl border border-white/10 bg-card py-1 shadow-lg shadow-black/40 ring-1 ring-white/5"
+          className={`absolute left-0 z-50 w-[min(calc(100vw-2rem),16rem)] rounded-xl border border-white/10 bg-card py-1 shadow-lg shadow-black/40 ring-1 ring-white/5 ${
+            compact
+              ? "bottom-[calc(100%+6px)]"
+              : "top-[calc(100%+6px)]"
+          }`}
           role="menu"
         >
           <div className="border-b border-white/10 px-3 py-2.5">

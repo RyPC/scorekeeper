@@ -7,10 +7,15 @@ import { usePathname } from "next/navigation";
 
 const nav = [
   { href: "/dashboard", label: "Home" },
-  { href: "/games/new", label: "Log game" },
   { href: "/stats", label: "Stats" },
   { href: "/friends", label: "Friends" },
 ];
+
+function isActive(pathname: string, href: string) {
+  return href === "/dashboard"
+    ? pathname.startsWith("/dashboard")
+    : pathname === href || pathname.startsWith(`${href}/`);
+}
 
 export function AppShell({
   user,
@@ -20,38 +25,95 @@ export function AppShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const [home, stats, friends] = nav;
+  const fabActive = pathname.startsWith("/games");
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">
-      <header className="sticky top-0 z-10 border-b border-white/10 bg-background/95 pt-[env(safe-area-inset-top)] backdrop-blur">
-        <div className="mx-auto flex max-w-lg flex-wrap items-center gap-x-2 gap-y-2 px-4 py-3 sm:gap-x-3">
-          <UserMenu user={user} />
-          <nav className="flex min-w-0 flex-1 flex-wrap justify-end gap-1 text-sm">
-            {nav.map((item) => {
-              const active =
-                item.href === "/dashboard"
-                  ? pathname.startsWith("/dashboard")
-                  : pathname === item.href || pathname.startsWith(`${item.href}/`);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg px-2.5 py-2 font-medium transition sm:px-3 ${
-                    active
-                      ? "bg-primary/20 text-primary"
-                      : "text-muted hover:bg-white/5 hover:text-foreground"
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
-        </div>
-      </header>
-      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-6">
         {children}
       </main>
+
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-10 border-t border-white/10 bg-background/95 backdrop-blur"
+        aria-label="Main navigation"
+      >
+        <div className="relative mx-auto grid max-w-lg grid-cols-5 items-end gap-1 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2">
+          <div className="flex justify-center pb-1.5">
+            <UserMenu user={user} compact />
+          </div>
+          <NavCell
+            href={home.href}
+            label={home.label}
+            active={isActive(pathname, home.href)}
+          />
+          <div className="relative flex min-h-[3.5rem] justify-center">
+            <Link
+              href="/games/new"
+              className={`absolute bottom-[calc(100%-0.25rem)] left-1/2 flex h-14 w-14 -translate-x-1/2 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-black/30 transition hover:brightness-110 active:scale-[0.98] ${
+                fabActive
+                  ? "ring-2 ring-white/35 ring-offset-2 ring-offset-background"
+                  : "ring-4 ring-background"
+              }`}
+              aria-label="Log new game"
+            >
+              <PlusIcon />
+            </Link>
+          </div>
+          <NavCell
+            href={stats.href}
+            label={stats.label}
+            active={isActive(pathname, stats.href)}
+          />
+          <NavCell
+            href={friends.href}
+            label={friends.label}
+            active={isActive(pathname, friends.href)}
+          />
+        </div>
+      </nav>
     </div>
+  );
+}
+
+function NavCell({
+  href,
+  label,
+  active,
+}: {
+  href: string;
+  label: string;
+  active: boolean;
+}) {
+  return (
+    <div className="flex justify-center pb-1.5">
+      <Link
+        href={href}
+        className={`inline-flex min-h-[44px] min-w-[44px] flex-col items-center justify-center rounded-lg px-1.5 text-center text-xs font-medium leading-tight transition sm:text-sm ${
+          active
+            ? "bg-primary/20 text-primary"
+            : "text-muted hover:bg-white/5 hover:text-foreground"
+        }`}
+      >
+        {label}
+      </Link>
+    </div>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg
+      width="28"
+      height="28"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.25"
+      strokeLinecap="round"
+      aria-hidden
+    >
+      <path d="M12 5v14M5 12h14" />
+    </svg>
   );
 }
