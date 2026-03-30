@@ -1,8 +1,8 @@
 "use client";
 
-import { FriendH2HModal } from "@/components/FriendH2HModal";
 import { UserAvatar } from "@/components/UserAvatar";
 import { scoresForUser, type GameRow } from "@/lib/game-stats";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
   CartesianGrid,
@@ -100,7 +100,6 @@ export function StatsClient({
   userId: string;
 }) {
   const [selectedSportId, setSelectedSportId] = useState<string | null>(null);
-  const [h2hOpponent, setH2hOpponent] = useState<UserRow | null>(null);
   const [marginOpen, setMarginOpen] = useState(false);
 
   const sportsWithGames = useMemo(() => {
@@ -206,11 +205,9 @@ export function StatsClient({
               const key = row.opponent?.id ?? `orphan-${row.pf}-${row.pa}`;
               return (
                 <li key={key}>
-                  <button
-                    type="button"
-                    onClick={() => row.opponent && setH2hOpponent(row.opponent)}
-                    disabled={!row.opponent}
-                    className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-card px-4 py-3 text-left transition hover:border-white/20 hover:bg-white/5 active:scale-[0.99] disabled:cursor-default disabled:hover:border-white/10 disabled:hover:bg-transparent"
+                  <Link
+                    href={row.opponent ? `/players/${row.opponent.id}` : "#"}
+                    className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-card px-4 py-3 text-left transition hover:border-white/20 hover:bg-white/5 active:scale-[0.99]"
                   >
                     {row.opponent ? (
                       <UserAvatar
@@ -246,7 +243,7 @@ export function StatsClient({
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-muted/50" aria-hidden><path d="m9 18 6-6-6-6"/></svg>
                       ) : null}
                     </div>
-                  </button>
+                  </Link>
                 </li>
               );
             })}
@@ -335,11 +332,6 @@ export function StatsClient({
         </>
       ) : null}
 
-      <FriendH2HModal
-        friend={h2hOpponent}
-        userId={userId}
-        onClose={() => setH2hOpponent(null)}
-      />
     </div>
   );
 }

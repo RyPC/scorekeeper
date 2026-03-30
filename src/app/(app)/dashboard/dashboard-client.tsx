@@ -1,6 +1,5 @@
 "use client";
 
-import { FriendH2HModal } from "@/components/FriendH2HModal";
 import { UserAvatar } from "@/components/UserAvatar";
 import { scoresForUser, type GameRow } from "@/lib/game-stats";
 import { format } from "date-fns";
@@ -28,8 +27,6 @@ export function DashboardClient({
   opponentMap,
   friends,
 }: Props) {
-  const [h2hFriend, setH2hFriend] = useState<UserRow | null>(null);
-
   // Sports that have at least one game
   const sportsWithGames = useMemo(() => {
     const sportIdsWithGames = new Set(games.map((g) => g.sport_id));
@@ -132,9 +129,8 @@ export function DashboardClient({
                 const winRate = wins / played;
                 return (
                   <li key={friend.id}>
-                    <button
-                      type="button"
-                      onClick={() => setH2hFriend(friend)}
+                    <Link
+                      href={`/players/${friend.id}`}
                       className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-background/50 px-3 py-3 text-left transition hover:border-white/20 hover:bg-white/5 active:scale-[0.99]"
                     >
                       <UserAvatar
@@ -161,7 +157,7 @@ export function DashboardClient({
                         </div>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-muted/50" aria-hidden><path d="m9 18 6-6-6-6"/></svg>
                       </div>
-                    </button>
+                    </Link>
                   </li>
                 );
               })}
@@ -230,11 +226,6 @@ export function DashboardClient({
         )}
       </section>
 
-      <FriendH2HModal
-        friend={h2hFriend}
-        userId={currentUser.id}
-        onClose={() => setH2hFriend(null)}
-      />
     </div>
   );
 }
