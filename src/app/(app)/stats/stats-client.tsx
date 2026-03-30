@@ -1,8 +1,9 @@
 "use client";
 
+import { FriendH2HModal } from "@/components/FriendH2HModal";
 import { UserAvatar } from "@/components/UserAvatar";
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { scoresForUser, type GameRow } from "@/lib/game-stats";
+import { useMemo, useState } from "react";
 import {
   CartesianGrid,
   Line,
@@ -20,15 +21,6 @@ type UserRow = {
 };
 
 type SportRow = { id: string; name: string };
-
-type Totals = {
-  games: number;
-  wins: number;
-  losses: number;
-  ties: number;
-  pointsFor: number;
-  pointsAgainst: number;
-};
 
 type ChartRow = {
   index: number;
@@ -98,27 +90,67 @@ function MarginPerGameChart({ data }: { data: ChartRow[] }) {
 
 export function StatsClient({
   sports,
-  sportFilter,
-  totals,
-  byOpponent,
-  chartSeries,
+  games,
+  opponentMap,
+  userId,
 }: {
   sports: SportRow[];
-  sportFilter: string | "all";
-  totals: Totals;
-  byOpponent: {
-    opponent?: UserRow;
-    wins: number;
-    losses: number;
-    ties: number;
-    pf: number;
-    pa: number;
-  }[];
-  chartSeries: ChartRow[];
+  games: GameRow[];
+  opponentMap: Record<string, UserRow>;
+  userId: string;
 }) {
-  const router = useRouter();
+  const [selectedSportId, setSelectedSportId] = useState<string | null>(null);
+  const [h2hOpponent, setH2hOpponent] = useState<UserRow | null>(null);
   const [marginOpen, setMarginOpen] = useState(false);
-  const [sportPending, startSportTransition] = useTransition();
+
+  const sportsWithGames = useMemo(() => {
+    const ids = new Set(games.map((g) => g.sport_id));
+    return sports.filter((s) => ids.has(s.id));
+  }, [sports, games]);
+
+  const filteredGames = useMemo(
+    () => (selectedSportId ? games.filter((g) => g.sport_id === selectedSportId) : games),
+    [games, selectedSportId]
+  );
+
+  const totals = useMemo(() => {
+    let wins = 0, losses = 0, ties = 0, pointsFor = 0, pointsAgainst = 0;
+    for (const g of filteredGames) {
+      const s = scoresForUser(g, userId);
+      pointsFor += s.mine;
+      pointsAgainst += s.theirs;
+      if (s.won) wins++;
+      else if (s.lost) losses++;
+      else ties++;
+    }
+    return { games: filteredGames.length, wins, losses, ties, pointsFor, pointsAgainst };
+  }, [filteredGames, userId]);
+
+  const byOpponent = useMemo(() => {
+    const byOpp: Record<string, { wins: number; losses: number; ties: number; pf: number; pa: number }> = {};
+    for (const g of filteredGames) {
+      const oid = g.player1_id === userId ? g.player2_id : g.player1_id;
+      if (!byOpp[oid]) byOpp[oid] = { wins: 0, losses: 0, ties: 0, pf: 0, pa: 0 };
+      const s = scoresForUser(g, userId);
+      byOpp[oid].pf += s.mine;
+      byOpp[oid].pa += s.theirs;
+      if (s.won) byOpp[oid].wins++;
+      else if (s.lost) byOpp[oid].losses++;
+      else byOpp[oid].ties++;
+    }
+    return Object.entries(byOpp)
+      .map(([id, v]) => ({ opponent: opponentMap[id] as UserRow | undefined, ...v }))
+      .sort((a, b) => (b.wins + b.losses + b.ties) - (a.wins + a.losses + a.ties));
+  }, [filteredGames, userId, opponentMap]);
+
+  const chartSeries = useMemo(() => {
+    let winCum = 0;
+    return filteredGames.map((g, i) => {
+      const s = scoresForUser(g, userId);
+      if (s.won) winCum++;
+      return { index: i + 1, label: `G${i + 1}`, cumulativeWins: winCum, margin: s.mine - s.theirs };
+    });
+  }, [filteredGames, userId]);
 
   return (
     <div className="flex flex-col gap-8">
@@ -129,30 +161,100 @@ export function StatsClient({
         </p>
       </div>
 
-      <div>
-        <label htmlFor="stats_sport" className="text-xs font-medium text-muted">
-          Filter by sport
-        </label>
-        <select
-          id="stats_sport"
-          value={sportFilter}
-          onChange={(e) => {
-            const v = e.target.value;
-            startSportTransition(() =>
-              router.push(v === "all" ? "/stats?sport=all" : `/stats?sport=${v}`)
-            );
-          }}
-          className={`mt-1 w-full max-w-xs rounded-lg border border-white/10 bg-card px-3 py-2.5 text-sm text-foreground outline-none ring-primary/40 transition-opacity focus:ring-2 ${sportPending ? "opacity-50" : ""}`}
-        >
-          <option value="all">All sports</option>
-          {sports.map((s) => (
-            <option key={s.id} value={s.id}>
+      {/* Sport slider */}
+      {sportsWithGames.length > 0 ? (
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none">
+          <button
+            type="button"
+            onClick={() => setSelectedSportId(null)}
+            className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition ${
+              selectedSportId === null
+                ? "bg-primary text-[#121212]"
+                : "border border-white/15 text-muted hover:border-white/30 hover:text-foreground"
+            }`}
+          >
+            All
+          </button>
+          {sportsWithGames.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => setSelectedSportId(s.id)}
+              className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                selectedSportId === s.id
+                  ? "bg-primary text-[#121212]"
+                  : "border border-white/15 text-muted hover:border-white/30 hover:text-foreground"
+              }`}
+            >
               {s.name}
-            </option>
+            </button>
           ))}
-        </select>
-      </div>
+        </div>
+      ) : null}
 
+      {/* 1v1 Matchups — primary */}
+      <section>
+        <h2 className="text-lg font-semibold tracking-tight">1v1 Matchups</h2>
+        <p className="mt-1 text-sm text-muted">Tap any row for the full history.</p>
+        {byOpponent.length === 0 ? (
+          <p className="mt-3 text-sm text-muted">No games recorded yet.</p>
+        ) : (
+          <ul className="mt-4 flex flex-col gap-3">
+            {byOpponent.map((row) => {
+              const played = row.wins + row.losses + row.ties;
+              const winRate = played > 0 ? row.wins / played : 0;
+              const key = row.opponent?.id ?? `orphan-${row.pf}-${row.pa}`;
+              return (
+                <li key={key}>
+                  <button
+                    type="button"
+                    onClick={() => row.opponent && setH2hOpponent(row.opponent)}
+                    disabled={!row.opponent}
+                    className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-card px-4 py-3 text-left transition hover:border-white/20 hover:bg-white/5 active:scale-[0.99] disabled:cursor-default disabled:hover:border-white/10 disabled:hover:bg-transparent"
+                  >
+                    {row.opponent ? (
+                      <UserAvatar
+                        username={row.opponent.username}
+                        avatarUrl={row.opponent.avatar_url}
+                        size="sm"
+                      />
+                    ) : null}
+                    <span className="min-w-0 flex-1 truncate font-medium text-foreground">
+                      {row.opponent?.username ?? "Unknown"}
+                    </span>
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-baseline gap-1 tabular-nums">
+                        <span className="text-lg font-bold text-emerald-400">{row.wins}</span>
+                        <span className="text-xs text-muted">–</span>
+                        <span className="text-lg font-bold text-rose-400">{row.losses}</span>
+                        {row.ties > 0 ? (
+                          <>
+                            <span className="text-xs text-muted">–</span>
+                            <span className="text-lg font-bold text-foreground">{row.ties}</span>
+                          </>
+                        ) : null}
+                      </div>
+                      <div className="hidden w-14 sm:block">
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                          <div
+                            className="h-full rounded-full bg-emerald-400/70"
+                            style={{ width: `${winRate * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                      {row.opponent ? (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-muted/50" aria-hidden><path d="m9 18 6-6-6-6"/></svg>
+                      ) : null}
+                    </div>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
+      {/* Summary — secondary */}
       <section className="rounded-xl border border-white/10 bg-card p-4">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
           Summary
@@ -160,39 +262,27 @@ export function StatsClient({
         <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
           <div>
             <dt className="text-muted">Games</dt>
-            <dd className="text-lg font-semibold tabular-nums text-foreground">
-              {totals.games}
-            </dd>
+            <dd className="text-lg font-semibold tabular-nums text-foreground">{totals.games}</dd>
           </div>
           <div>
             <dt className="text-muted">Wins</dt>
-            <dd className="text-lg font-semibold tabular-nums text-emerald-400">
-              {totals.wins}
-            </dd>
+            <dd className="text-lg font-semibold tabular-nums text-emerald-400">{totals.wins}</dd>
           </div>
           <div>
             <dt className="text-muted">Losses</dt>
-            <dd className="text-lg font-semibold tabular-nums text-rose-300">
-              {totals.losses}
-            </dd>
+            <dd className="text-lg font-semibold tabular-nums text-rose-300">{totals.losses}</dd>
           </div>
           <div>
             <dt className="text-muted">Ties</dt>
-            <dd className="text-lg font-semibold tabular-nums text-foreground">
-              {totals.ties}
-            </dd>
+            <dd className="text-lg font-semibold tabular-nums text-foreground">{totals.ties}</dd>
           </div>
           <div>
             <dt className="text-muted">Points for</dt>
-            <dd className="text-lg font-semibold tabular-nums text-foreground">
-              {totals.pointsFor}
-            </dd>
+            <dd className="text-lg font-semibold tabular-nums text-foreground">{totals.pointsFor}</dd>
           </div>
           <div>
             <dt className="text-muted">Points against</dt>
-            <dd className="text-lg font-semibold tabular-nums text-foreground">
-              {totals.pointsAgainst}
-            </dd>
+            <dd className="text-lg font-semibold tabular-nums text-foreground">{totals.pointsAgainst}</dd>
           </div>
         </dl>
       </section>
@@ -229,14 +319,10 @@ export function StatsClient({
               <div>
                 <h2 className="text-sm font-semibold text-foreground">Margin per game</h2>
                 <p className="mt-1 text-xs text-muted">
-                  Your score minus opponent (per game). Tap to {marginOpen ? "hide" : "show"}{" "}
-                  the chart.
+                  Your score minus opponent (per game). Tap to {marginOpen ? "hide" : "show"} the chart.
                 </p>
               </div>
-              <span
-                className={`shrink-0 text-muted transition-transform ${marginOpen ? "rotate-180" : ""}`}
-                aria-hidden
-              >
+              <span className={`shrink-0 text-muted transition-transform ${marginOpen ? "rotate-180" : ""}`} aria-hidden>
                 ▼
               </span>
             </button>
@@ -249,54 +335,11 @@ export function StatsClient({
         </>
       ) : null}
 
-      <section>
-        <h2 className="text-lg font-semibold tracking-tight">By opponent</h2>
-        {byOpponent.length === 0 ? (
-          <p className="mt-3 text-sm text-muted">No games recorded yet.</p>
-        ) : (
-          <ul className="mt-4 flex flex-col gap-3">
-            {byOpponent.map((row) => (
-              <li
-                key={row.opponent?.id ?? `orphan-${row.pf}-${row.pa}`}
-                className="rounded-xl border border-white/10 bg-card px-4 py-3"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-3">
-                    {row.opponent ? (
-                      <>
-                        <UserAvatar
-                          username={row.opponent.username}
-                          avatarUrl={row.opponent.avatar_url}
-                          size="sm"
-                        />
-                        <span className="truncate font-medium">
-                          {row.opponent.username}
-                        </span>
-                      </>
-                    ) : (
-                      <span className="text-muted">Unknown</span>
-                    )}
-                  </div>
-                  <div className="shrink-0 text-right text-sm tabular-nums text-muted">
-                    <span className="text-foreground">{row.wins}W</span> ·{" "}
-                    <span className="text-foreground">{row.losses}L</span>
-                    {row.ties > 0 ? (
-                      <>
-                        {" "}
-                        · <span className="text-foreground">{row.ties}T</span>
-                      </>
-                    ) : null}
-                  </div>
-                </div>
-                <p className="mt-2 text-xs text-muted">
-                  PF {row.pf} · PA {row.pa} · Diff {row.pf - row.pa >= 0 ? "+" : ""}
-                  {row.pf - row.pa}
-                </p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      <FriendH2HModal
+        friend={h2hOpponent}
+        userId={userId}
+        onClose={() => setH2hOpponent(null)}
+      />
     </div>
   );
 }

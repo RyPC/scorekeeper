@@ -11,6 +11,17 @@ const nav = [
   { href: "/friends", label: "Friends" },
 ];
 
+const pageLabels: { match: (p: string) => boolean; label: string }[] = [
+  { match: (p) => p.startsWith("/dashboard"), label: "Home" },
+  { match: (p) => p.startsWith("/stats"), label: "Stats" },
+  { match: (p) => p.startsWith("/friends"), label: "Friends" },
+  { match: (p) => p.startsWith("/games"), label: "Log game" },
+];
+
+function pageLabel(pathname: string) {
+  return pageLabels.find((r) => r.match(pathname))?.label ?? null;
+}
+
 function isActive(pathname: string, href: string) {
   return href === "/dashboard"
     ? pathname.startsWith("/dashboard")
@@ -30,6 +41,17 @@ export function AppShell({
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">
+      <header className="sticky top-0 z-10 border-b border-white/10 bg-background/95 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-lg items-center gap-2 px-4 py-3">
+          <span className="text-lg font-semibold tracking-tight text-foreground">Scorekeeper</span>
+          {pageLabel(pathname) ? (
+            <>
+              <span className="text-sm text-muted/50">|</span>
+              <span className="text-sm text-muted">{pageLabel(pathname)}</span>
+            </>
+          ) : null}
+        </div>
+      </header>
       <main className="mx-auto flex w-full max-w-lg flex-1 flex-col px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-6">
         {children}
       </main>

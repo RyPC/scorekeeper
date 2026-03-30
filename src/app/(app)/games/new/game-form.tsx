@@ -1,6 +1,7 @@
 "use client";
 
 import { addGame } from "@/app/actions/games";
+import { createSport } from "@/app/actions/sports";
 import { UserAvatar } from "@/components/UserAvatar";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -15,7 +16,7 @@ type UserRow = {
 type SportRow = { id: string; name: string };
 
 export function GameForm({
-  sports,
+  sports: initialSports,
   opponents,
   initialSportId,
 }: {
@@ -26,6 +27,12 @@ export function GameForm({
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [sports, setSports] = useState<SportRow[]>(initialSports);
+  const [selectedSportId, setSelectedSportId] = useState<string>(initialSportId ?? "");
+  const [showNewSport, setShowNewSport] = useState(false);
+  const [newSportName, setNewSportName] = useState("");
+  const [newSportError, setNewSportError] = useState<string | null>(null);
+  const [newSportPending, setNewSportPending] = useState(false);
 
   const canSubmit = sports.length > 0 && opponents.length > 0;
   const blockReason =
@@ -34,6 +41,30 @@ export function GameForm({
       : opponents.length === 0
         ? "no-opponents"
         : null;
+
+  async function handleCreateSport(e: React.FormEvent) {
+    e.preventDefault();
+    setNewSportError(null);
+    setNewSportPending(true);
+    try {
+      const fd = new FormData();
+      fd.set("name", newSportName.trim());
+      const res = await createSport(fd);
+      if ("error" in res && res.error) {
+        setNewSportError(res.error);
+        return;
+      }
+      if ("ok" in res && res.ok && res.sportId) {
+        const newSport = { id: res.sportId, name: newSportName.trim() };
+        setSports((prev) => [...prev, newSport]);
+        setSelectedSportId(res.sportId);
+        setNewSportName("");
+        setShowNewSport(false);
+      }
+    } finally {
+      setNewSportPending(false);
+    }
+  }
 
   async function handleSubmit(formData: FormData) {
     setError(null);
@@ -74,9 +105,16 @@ export function GameForm({
           id="sport_id"
           name="sport_id"
           required
-          defaultValue={initialSportId ?? ""}
-          disabled={sports.length === 0}
-          className="mt-1 w-full rounded-lg border border-white/10 bg-background px-3 py-2.5 text-sm text-foreground outline-none ring-primary/40 focus:ring-2 disabled:cursor-not-allowed disabled:opacity-50"
+          value={selectedSportId}
+          onChange={(e) => {
+            if (e.target.value === "__new__") {
+              setShowNewSport(true);
+            } else {
+              setSelectedSportId(e.target.value);
+              setShowNewSport(false);
+            }
+          }}
+          className="mt-1 w-full rounded-lg border border-white/10 bg-background px-3 py-2.5 text-sm text-foreground outline-none ring-primary/40 focus:ring-2"
         >
           <option value="" disabled>
             Select sport
@@ -86,7 +124,34 @@ export function GameForm({
               {s.name}
             </option>
           ))}
+          <option value="__new__">＋ New sport…</option>
         </select>
+        {showNewSport ? (
+          <form onSubmit={handleCreateSport} className="mt-2 flex gap-2">
+            <input
+              autoFocus
+              value={newSportName}
+              onChange={(e) => setNewSportName(e.target.value)}
+              placeholder="Sport name"
+              className="min-w-0 flex-1 rounded-lg border border-white/10 bg-background px-3 py-2 text-sm text-foreground outline-none ring-primary/40 focus:ring-2"
+            />
+            <button
+              type="submit"
+              disabled={newSportPending || !newSportName.trim()}
+              className="rounded-lg border border-primary/50 bg-primary/10 px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/20 disabled:opacity-50"
+            >
+              {newSportPending ? "…" : "Create"}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setShowNewSport(false); setNewSportName(""); setNewSportError(null); }}
+              className="rounded-lg border border-white/10 px-3 py-2 text-sm text-muted hover:text-foreground"
+            >
+              Cancel
+            </button>
+          </form>
+        ) : null}
+        {newSportError ? <p className="mt-1 text-xs text-red-400">{newSportError}</p> : null}
       </div>
 
       <div>
@@ -177,14 +242,8 @@ export function GameForm({
             <>
               <p className="font-semibold">Add a sport first</p>
               <p className="mt-1 text-muted">
-                Create one on Home, then come back here to log a result.
+                Use the Sport dropdown above to create your first sport.
               </p>
-              <Link
-                href="/dashboard"
-                className="mt-3 inline-flex min-h-[44px] items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-[#121212] hover:bg-primary-hover"
-              >
-                Go to Home
-              </Link>
             </>
           ) : (
             <>

@@ -1,13 +1,11 @@
 "use client";
 
-import { createSport } from "@/app/actions/sports";
 import { FriendH2HModal } from "@/components/FriendH2HModal";
 import { UserAvatar } from "@/components/UserAvatar";
 import { scoresForUser, type GameRow } from "@/lib/game-stats";
 import { format } from "date-fns";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 
 type UserRow = {
   id: string;
@@ -18,219 +16,183 @@ type UserRow = {
 type Props = {
   currentUser: UserRow;
   sports: { id: string; name: string; created_at: string }[];
-  sportId: string | null;
   games: GameRow[];
   opponentMap: Record<string, UserRow>;
-  headToHead: {
-    friend: UserRow;
-    wins: number;
-    losses: number;
-    played: number;
-  }[];
+  friends: UserRow[];
 };
 
 export function DashboardClient({
   currentUser,
   sports,
-  sportId,
   games,
   opponentMap,
-  headToHead,
+  friends,
 }: Props) {
-  const router = useRouter();
-  const [sportError, setSportError] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
-  const [sportPending, startSportTransition] = useTransition();
   const [h2hFriend, setH2hFriend] = useState<UserRow | null>(null);
 
-  const currentSportName = useMemo(
-    () => sports.find((s) => s.id === sportId)?.name ?? null,
-    [sports, sportId]
+  // Sports that have at least one game
+  const sportsWithGames = useMemo(() => {
+    const sportIdsWithGames = new Set(games.map((g) => g.sport_id));
+    return sports.filter((s) => sportIdsWithGames.has(s.id));
+  }, [sports, games]);
+
+  const [selectedSportId, setSelectedSportId] = useState<string | null>(
+    () => sportsWithGames[0]?.id ?? null
   );
 
-  const record = useMemo(() => {
-    let w = 0;
-    let l = 0;
-    let t = 0;
-    for (const g of games) {
-      const s = scoresForUser(g, currentUser.id);
-      if (s.won) w++;
-      else if (s.lost) l++;
-      else t++;
-    }
-    return { w, l, t, total: games.length };
-  }, [games, currentUser.id]);
+  // Keep selectedSportId valid if sportsWithGames changes
+  const activeSportId =
+    selectedSportId && sportsWithGames.some((s) => s.id === selectedSportId)
+      ? selectedSportId
+      : sportsWithGames[0]?.id ?? null;
 
-  async function handleCreateSport(formData: FormData) {
-    setSportError(null);
-    setCreating(true);
-    try {
-      const res = await createSport(formData);
-      if ("ok" in res && res.ok && res.sportId) {
-        router.replace(`/dashboard?sport=${res.sportId}`);
-        router.refresh();
-      } else if ("error" in res && res.error) {
-        setSportError(res.error);
-      }
-    } finally {
-      setCreating(false);
-    }
-  }
+  const currentSportName = useMemo(
+    () => sports.find((s) => s.id === activeSportId)?.name ?? null,
+    [sports, activeSportId]
+  );
+
+  const filteredGames = useMemo(
+    () => (activeSportId ? games.filter((g) => g.sport_id === activeSportId) : games),
+    [games, activeSportId]
+  );
+
+  const headToHead = useMemo(() => {
+    return friends
+      .map((f) => {
+        let wins = 0;
+        let losses = 0;
+        for (const g of filteredGames) {
+          const other = g.player1_id === currentUser.id ? g.player2_id : g.player1_id;
+          if (other !== f.id) continue;
+          const s = scoresForUser(g, currentUser.id);
+          if (s.won) wins++;
+          else if (s.lost) losses++;
+        }
+        return { friend: f, wins, losses, played: wins + losses };
+      })
+      .filter((h) => h.played > 0);
+  }, [friends, filteredGames, currentUser.id]);
+
+  const recentGames = filteredGames.slice(0, 10);
 
   return (
     <div className="flex flex-col gap-10">
       <section className="overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-card via-card to-primary/[0.07] p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.04)]">
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex min-w-0 gap-4">
-            <UserAvatar
-              username={currentUser.username}
-              avatarUrl={currentUser.avatar_url}
-              size="lg"
-            />
-            <div className="min-w-0">
-              <p className="text-sm text-muted">Welcome back</p>
-              <h1 className="mt-0.5 text-2xl font-semibold tracking-tight text-foreground">
-                {currentUser.username}
-              </h1>
-              <p className="mt-1 text-sm text-muted">
-                {currentSportName
-                  ? `You’re tracking ${currentSportName}.`
-                  : sports.length === 0
-                    ? "Add a sport below to get started."
-                    : "Pick a sport to see your games."}
-              </p>
-            </div>
+        {/* User header */}
+        <div className="flex min-w-0 gap-4">
+          <UserAvatar
+            username={currentUser.username}
+            avatarUrl={currentUser.avatar_url}
+            size="lg"
+          />
+          <div className="min-w-0">
+            <p className="text-sm text-muted">Welcome back</p>
+            <h1 className="mt-0.5 text-2xl font-semibold tracking-tight text-foreground">
+              {currentUser.username}
+            </h1>
           </div>
         </div>
 
-        <div className="mt-6 flex flex-col gap-4 border-t border-white/10 pt-5">
-          <div>
-            <label
-              htmlFor="home_sport"
-              className="text-xs font-medium uppercase tracking-wide text-muted"
-            >
-              Current sport
-            </label>
-            {sports.length === 0 ? (
-              <p className="mt-2 text-sm text-muted">No sports yet — create one below.</p>
-            ) : (
-              <select
-                id="home_sport"
-                value={sportId ?? ""}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (v) startSportTransition(() => router.push(`/dashboard?sport=${v}`));
-                }}
-                className={`mt-2 w-full max-w-xs rounded-xl border border-white/10 bg-background/80 px-3 py-2.5 text-sm text-foreground outline-none ring-primary/40 transition-opacity focus:ring-2 ${sportPending ? "opacity-50" : ""}`}
-                aria-label="Switch sport"
-              >
-                {sports.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-
-          {sportId && sports.length > 0 ? (
-            <div className="grid grid-cols-3 gap-2 sm:max-w-md">
-              <div className="rounded-xl border border-white/10 bg-background/60 px-3 py-3 text-center">
-                <p className="text-[11px] font-medium uppercase tracking-wide text-muted">
-                  Games
-                </p>
-                <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">
-                  {record.total}
-                </p>
-              </div>
-              <div className="rounded-xl border border-white/10 bg-background/60 px-3 py-3 text-center">
-                <p className="text-[11px] font-medium uppercase tracking-wide text-muted">
-                  Wins
-                </p>
-                <p className="mt-1 text-xl font-semibold tabular-nums text-emerald-400">
-                  {record.w}
-                </p>
-              </div>
-              <div className="rounded-xl border border-white/10 bg-background/60 px-3 py-3 text-center">
-                <p className="text-[11px] font-medium uppercase tracking-wide text-muted">
-                  Losses
-                </p>
-                <p className="mt-1 text-xl font-semibold tabular-nums text-rose-300">
-                  {record.l}
-                </p>
-              </div>
+        {/* Sport slider + Head-to-head */}
+        <div className="mt-5 border-t border-white/10 pt-5">
+          {sportsWithGames.length > 0 ? (
+            <div className="-mx-1 mb-4 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none">
+              {sportsWithGames.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setSelectedSportId(s.id)}
+                  className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                    activeSportId === s.id
+                      ? "bg-primary text-[#121212]"
+                      : "border border-white/15 text-muted hover:border-white/30 hover:text-foreground"
+                  }`}
+                >
+                  {s.name}
+                </button>
+              ))}
             </div>
           ) : null}
 
-          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-            <Link
-              href={sportId ? `/games/new?sport=${sportId}` : "/games/new"}
-              className="inline-flex min-h-[48px] flex-1 items-center justify-center rounded-xl bg-primary px-6 py-3.5 text-center text-base font-semibold text-[#121212] shadow-lg shadow-primary/20 transition hover:bg-primary-hover active:scale-[0.99] sm:max-w-xs"
-            >
-              Log game
-            </Link>
-            <div className="flex flex-wrap gap-2 sm:justify-start">
-              <Link
-                href={sportId ? `/stats?sport=${sportId}` : "/stats"}
-                className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-xl border border-white/15 bg-background/50 px-4 py-2.5 text-sm font-medium text-foreground hover:bg-white/5 sm:flex-initial"
-              >
-                Stats & history
-              </Link>
-              <Link
-                href="/friends"
-                className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-xl border border-white/15 bg-background/50 px-4 py-2.5 text-sm font-medium text-foreground hover:bg-white/5 sm:flex-initial"
-              >
-                Friends
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted">
+            Head-to-head{currentSportName ? ` · ${currentSportName}` : ""}
+          </p>
 
-      <section className="rounded-xl border border-white/10 bg-card/50 p-4">
-        <h2 className="text-sm font-semibold text-foreground">Add another sport</h2>
-        <form
-          action={handleCreateSport}
-          className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end"
-        >
-          <div className="flex-1">
-            <label htmlFor="sport_name" className="sr-only">
-              Sport name
-            </label>
-            <input
-              id="sport_name"
-              name="name"
-              required
-              placeholder="e.g. Tennis, Basketball"
-              className="w-full rounded-lg border border-white/10 bg-background px-3 py-2.5 text-sm text-foreground outline-none ring-primary/40 focus:ring-2"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={creating}
-            className="rounded-lg border border-primary/50 bg-primary/10 px-4 py-2.5 text-sm font-semibold text-primary hover:bg-primary/20 disabled:opacity-50"
+          {headToHead.length === 0 ? (
+            <p className="mt-3 text-sm text-muted">
+              {friends.length === 0
+                ? "Add friends to see your records against them."
+                : sportsWithGames.length === 0
+                  ? "Log a game to see head-to-head records."
+                  : "No games against friends in this sport yet."}
+            </p>
+          ) : (
+            <ul className="mt-3 flex flex-col gap-2">
+              {headToHead.map(({ friend, wins, losses, played }) => {
+                const winRate = wins / played;
+                return (
+                  <li key={friend.id}>
+                    <button
+                      type="button"
+                      onClick={() => setH2hFriend(friend)}
+                      className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-background/50 px-3 py-3 text-left transition hover:border-white/20 hover:bg-white/5 active:scale-[0.99]"
+                    >
+                      <UserAvatar
+                        username={friend.username}
+                        avatarUrl={friend.avatar_url}
+                        size="sm"
+                      />
+                      <span className="min-w-0 flex-1 truncate font-medium text-foreground">
+                        {friend.username}
+                      </span>
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-baseline gap-1 tabular-nums">
+                          <span className="text-lg font-bold text-emerald-400">{wins}</span>
+                          <span className="text-xs text-muted">–</span>
+                          <span className="text-lg font-bold text-rose-400">{losses}</span>
+                        </div>
+                        <div className="hidden w-14 sm:block">
+                          <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                            <div
+                              className="h-full rounded-full bg-emerald-400/70"
+                              style={{ width: `${winRate * 100}%` }}
+                            />
+                          </div>
+                        </div>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-muted/50" aria-hidden><path d="m9 18 6-6-6-6"/></svg>
+                      </div>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+
+        {/* Log game */}
+        <div className="mt-5 border-t border-white/10 pt-5">
+          <Link
+            href={activeSportId ? `/games/new?sport=${activeSportId}` : "/games/new"}
+            className="inline-flex min-h-[48px] w-full items-center justify-center rounded-xl bg-primary px-6 py-3.5 text-center text-base font-semibold text-[#121212] shadow-lg shadow-primary/20 transition hover:bg-primary-hover active:scale-[0.99] sm:max-w-xs"
           >
-            {creating ? "Saving…" : "Create sport"}
-          </button>
-        </form>
-        {sportError ? (
-          <p className="mt-2 text-sm text-red-400">{sportError}</p>
-        ) : null}
+            Log game
+          </Link>
+        </div>
       </section>
 
       <section>
         <h2 className="text-lg font-semibold tracking-tight">Recent games</h2>
         <p className="mt-1 text-sm text-muted">
-          Last results for {currentSportName ?? "this sport"}.
+          Last results{currentSportName ? ` for ${currentSportName}` : ""}.
         </p>
-        {games.length === 0 ? (
+        {recentGames.length === 0 ? (
           <p className="mt-4 rounded-xl border border-dashed border-white/15 bg-card/30 px-4 py-8 text-center text-sm text-muted">
             Nothing logged yet. Hit <span className="text-foreground">Log game</span> when
             you play next.
           </p>
         ) : (
           <ul className="mt-4 flex flex-col gap-3">
-            {games.map((g) => {
+            {recentGames.map((g) => {
               const oppId =
                 g.player1_id === currentUser.id ? g.player2_id : g.player1_id;
               const opp = opponentMap[oppId];
@@ -264,48 +226,6 @@ export function DashboardClient({
                 </li>
               );
             })}
-          </ul>
-        )}
-      </section>
-
-      <section>
-        <h2 className="text-lg font-semibold tracking-tight">Head-to-head</h2>
-        <p className="mt-1 text-sm text-muted">Friends for this sport.</p>
-        {headToHead.length === 0 ? (
-          <p className="mt-4 text-sm text-muted">
-            Add friends on the Friends tab to see quick records here.
-          </p>
-        ) : (
-          <ul className="mt-4 flex flex-col gap-2">
-            {headToHead.map(({ friend, wins, losses, played }) => (
-              <li key={friend.id}>
-                <button
-                  type="button"
-                  onClick={() => setH2hFriend(friend)}
-                  className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-card px-4 py-3 text-left transition hover:border-white/20 hover:bg-card/80 active:scale-[0.99]"
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <UserAvatar
-                      username={friend.username}
-                      avatarUrl={friend.avatar_url}
-                      size="sm"
-                    />
-                    <span className="truncate font-medium">{friend.username}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-right text-sm tabular-nums text-muted">
-                    {played === 0 ? (
-                      <span>No games</span>
-                    ) : (
-                      <span>
-                        <span className="text-foreground">{wins}W</span> ·{" "}
-                        <span className="text-foreground">{losses}L</span>
-                      </span>
-                    )}
-                    <span className="text-xs text-muted/50">▶</span>
-                  </div>
-                </button>
-              </li>
-            ))}
           </ul>
         )}
       </section>
