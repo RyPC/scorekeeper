@@ -20,7 +20,7 @@ export default async function FriendsPage() {
           Manage who you can pick as an opponent.
         </p>
       </div>
-      <FriendsClient friends={friends} otherUsers={others} />
+      <FriendsClient friends={friends} otherUsers={others} userId={userId} />
     </div>
   );
 }

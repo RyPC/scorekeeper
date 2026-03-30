@@ -1,6 +1,7 @@
 "use client";
 
 import { addFriend, removeFriend } from "@/app/actions/friends";
+import { FriendH2HModal } from "@/components/FriendH2HModal";
 import { UserAvatar } from "@/components/UserAvatar";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -14,13 +15,16 @@ type UserRow = {
 export function FriendsClient({
   friends,
   otherUsers,
+  userId,
 }: {
   friends: UserRow[];
   otherUsers: UserRow[];
+  userId: string;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
+  const [h2hFriend, setH2hFriend] = useState<UserRow | null>(null);
 
   const friendIds = new Set(friends.map((f) => f.id));
   const available = otherUsers.filter((u) => !friendIds.has(u.id));
@@ -70,10 +74,15 @@ export function FriendsClient({
                 key={f.id}
                 className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-card px-4 py-3"
               >
-                <div className="flex min-w-0 items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setH2hFriend(f)}
+                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                >
                   <UserAvatar username={f.username} avatarUrl={f.avatar_url} size="sm" />
                   <span className="truncate font-medium">{f.username}</span>
-                </div>
+                  <span className="ml-auto mr-2 text-xs text-muted/50">▶</span>
+                </button>
                 <button
                   type="button"
                   disabled={pending === f.id}
@@ -121,6 +130,12 @@ export function FriendsClient({
           </ul>
         )}
       </section>
+
+      <FriendH2HModal
+        friend={h2hFriend}
+        userId={userId}
+        onClose={() => setH2hFriend(null)}
+      />
     </div>
   );
 }

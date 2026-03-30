@@ -1,6 +1,7 @@
 "use client";
 
 import { createSport } from "@/app/actions/sports";
+import { FriendH2HModal } from "@/components/FriendH2HModal";
 import { UserAvatar } from "@/components/UserAvatar";
 import { scoresForUser, type GameRow } from "@/lib/game-stats";
 import { format } from "date-fns";
@@ -40,6 +41,7 @@ export function DashboardClient({
   const [sportError, setSportError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [sportPending, startSportTransition] = useTransition();
+  const [h2hFriend, setH2hFriend] = useState<UserRow | null>(null);
 
   const currentSportName = useMemo(
     () => sports.find((s) => s.id === sportId)?.name ?? null,
@@ -276,33 +278,43 @@ export function DashboardClient({
         ) : (
           <ul className="mt-4 flex flex-col gap-2">
             {headToHead.map(({ friend, wins, losses, played }) => (
-              <li
-                key={friend.id}
-                className="flex items-center justify-between rounded-xl border border-white/10 bg-card px-4 py-3"
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <UserAvatar
-                    username={friend.username}
-                    avatarUrl={friend.avatar_url}
-                    size="sm"
-                  />
-                  <span className="truncate font-medium">{friend.username}</span>
-                </div>
-                <div className="text-right text-sm tabular-nums text-muted">
-                  {played === 0 ? (
-                    <span>No games</span>
-                  ) : (
-                    <span>
-                      <span className="text-foreground">{wins}W</span> ·{" "}
-                      <span className="text-foreground">{losses}L</span>
-                    </span>
-                  )}
-                </div>
+              <li key={friend.id}>
+                <button
+                  type="button"
+                  onClick={() => setH2hFriend(friend)}
+                  className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-card px-4 py-3 text-left transition hover:border-white/20 hover:bg-card/80 active:scale-[0.99]"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <UserAvatar
+                      username={friend.username}
+                      avatarUrl={friend.avatar_url}
+                      size="sm"
+                    />
+                    <span className="truncate font-medium">{friend.username}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-right text-sm tabular-nums text-muted">
+                    {played === 0 ? (
+                      <span>No games</span>
+                    ) : (
+                      <span>
+                        <span className="text-foreground">{wins}W</span> ·{" "}
+                        <span className="text-foreground">{losses}L</span>
+                      </span>
+                    )}
+                    <span className="text-xs text-muted/50">▶</span>
+                  </div>
+                </button>
               </li>
             ))}
           </ul>
         )}
       </section>
+
+      <FriendH2HModal
+        friend={h2hFriend}
+        userId={currentUser.id}
+        onClose={() => setH2hFriend(null)}
+      />
     </div>
   );
 }

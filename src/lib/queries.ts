@@ -66,6 +66,26 @@ export async function fetchAllUsersExcept(userId: string) {
   return (data ?? []).filter((u) => u.id !== userId);
 }
 
+/** All games between two specific players, ordered chronologically. */
+export async function fetchGamesVsFriend(
+  userId: string,
+  friendId: string
+): Promise<GameRow[]> {
+  const sb = createServiceClient();
+  const { data, error } = await sb
+    .from("games")
+    .select("*")
+    .or(
+      `and(player1_id.eq.${userId},player2_id.eq.${friendId}),and(player1_id.eq.${friendId},player2_id.eq.${userId})`
+    )
+    .order("created_at", { ascending: true });
+  if (error) {
+    console.error(error);
+    return [];
+  }
+  return (data ?? []) as GameRow[];
+}
+
 /** All games for a user, optionally filtered by sport (null = every sport). */
 export async function fetchGamesForUser(userId: string, sportId: string | null) {
   const sb = createServiceClient();
