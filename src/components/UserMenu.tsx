@@ -68,7 +68,7 @@ export function UserMenu({
 
       {open ? (
         <div
-          className={`absolute left-0 z-50 w-[min(calc(100vw-2rem),16rem)] rounded-xl border border-white/10 bg-card py-1 shadow-lg shadow-black/40 ring-1 ring-white/5 ${
+          className={`absolute right-0 z-50 w-max min-w-[8rem] max-w-[min(calc(100vw-2rem),16rem)] rounded-xl border border-white/10 bg-card py-1 shadow-lg shadow-black/40 ring-1 ring-white/5 ${
             compact
               ? "bottom-[calc(100%+6px)]"
               : "top-[calc(100%+6px)]"
