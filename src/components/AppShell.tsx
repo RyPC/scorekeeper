@@ -39,18 +39,20 @@ export function AppShell({
         aria-label="Main navigation"
       >
         <div className="relative mx-auto grid max-w-lg grid-cols-5 items-center gap-1 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2">
-          <div className="flex items-center justify-center">
-            <UserMenu user={user} compact />
-          </div>
           <NavCell
             href={home.href}
             label={home.label}
             active={isActive(pathname, home.href)}
           />
+          <NavCell
+            href={stats.href}
+            label={stats.label}
+            active={isActive(pathname, stats.href)}
+          />
           <div className="relative flex min-h-[3.5rem] justify-center">
             <Link
               href="/games/new"
-              className={`absolute bottom-9 left-1/2 flex h-14 w-14 -translate-x-1/2 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-black/30 transition hover:brightness-110 active:scale-[0.98] ${
+              className={`absolute bottom-9 left-1/2 flex h-16 w-16 -translate-x-1/2 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-black/30 transition hover:brightness-110 active:scale-[0.98] ${
                 fabActive
                   ? "ring-2 ring-white/35 ring-offset-2 ring-offset-background"
                   : "ring-4 ring-background"
@@ -61,15 +63,13 @@ export function AppShell({
             </Link>
           </div>
           <NavCell
-            href={stats.href}
-            label={stats.label}
-            active={isActive(pathname, stats.href)}
-          />
-          <NavCell
             href={friends.href}
             label={friends.label}
             active={isActive(pathname, friends.href)}
           />
+          <div className="flex items-center justify-center">
+            <UserMenu user={user} compact />
+          </div>
         </div>
       </nav>
     </div>
@@ -104,8 +104,8 @@ function NavCell({
 function PlusIcon() {
   return (
     <svg
-      width="28"
-      height="28"
+      width="32"
+      height="32"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"

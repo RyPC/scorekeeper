@@ -44,7 +44,7 @@ export function UserMenu({
         onClick={() => setOpen((v) => !v)}
         className={
           compact
-            ? "flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-white/10 bg-card p-1 transition hover:border-primary/40 hover:bg-white/[0.04] active:scale-[0.99]"
+            ? "flex min-h-[44px] min-w-[44px] items-center justify-center transition active:scale-[0.99]"
             : "flex min-h-[44px] max-w-[min(100vw-2rem,14rem)] items-center gap-2 rounded-xl border border-white/10 bg-card py-1 pl-1 pr-2 text-left transition hover:border-primary/40 hover:bg-white/[0.04] active:scale-[0.99]"
         }
         aria-expanded={open}
