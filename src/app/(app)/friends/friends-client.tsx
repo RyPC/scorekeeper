@@ -80,7 +80,7 @@ export function FriendsClient({
                   onClick={() => onRemove(f.id)}
                   className="shrink-0 rounded-lg border border-white/15 px-4 py-2.5 text-sm font-medium text-muted hover:border-red-400/50 hover:text-red-300 disabled:opacity-50"
                 >
-                  Remove
+                  {pending === f.id ? "…" : "Remove"}
                 </button>
               </li>
             ))}

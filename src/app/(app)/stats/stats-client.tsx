@@ -2,7 +2,7 @@
 
 import { UserAvatar } from "@/components/UserAvatar";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import {
   CartesianGrid,
   Line,
@@ -118,6 +118,7 @@ export function StatsClient({
 }) {
   const router = useRouter();
   const [marginOpen, setMarginOpen] = useState(false);
+  const [sportPending, startSportTransition] = useTransition();
 
   return (
     <div className="flex flex-col gap-8">
@@ -137,9 +138,11 @@ export function StatsClient({
           value={sportFilter}
           onChange={(e) => {
             const v = e.target.value;
-            router.push(v === "all" ? "/stats?sport=all" : `/stats?sport=${v}`);
+            startSportTransition(() =>
+              router.push(v === "all" ? "/stats?sport=all" : `/stats?sport=${v}`)
+            );
           }}
-          className="mt-1 w-full max-w-xs rounded-lg border border-white/10 bg-card px-3 py-2.5 text-sm text-foreground outline-none ring-primary/40 focus:ring-2"
+          className={`mt-1 w-full max-w-xs rounded-lg border border-white/10 bg-card px-3 py-2.5 text-sm text-foreground outline-none ring-primary/40 transition-opacity focus:ring-2 ${sportPending ? "opacity-50" : ""}`}
         >
           <option value="all">All sports</option>
           {sports.map((s) => (

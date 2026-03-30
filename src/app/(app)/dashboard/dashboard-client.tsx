@@ -6,7 +6,7 @@ import { scoresForUser, type GameRow } from "@/lib/game-stats";
 import { format } from "date-fns";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 
 type UserRow = {
   id: string;
@@ -39,6 +39,7 @@ export function DashboardClient({
   const router = useRouter();
   const [sportError, setSportError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [sportPending, startSportTransition] = useTransition();
 
   const currentSportName = useMemo(
     () => sports.find((s) => s.id === sportId)?.name ?? null,
@@ -116,9 +117,9 @@ export function DashboardClient({
                 value={sportId ?? ""}
                 onChange={(e) => {
                   const v = e.target.value;
-                  if (v) router.push(`/dashboard?sport=${v}`);
+                  if (v) startSportTransition(() => router.push(`/dashboard?sport=${v}`));
                 }}
-                className="mt-2 w-full max-w-xs rounded-xl border border-white/10 bg-background/80 px-3 py-2.5 text-sm text-foreground outline-none ring-primary/40 focus:ring-2"
+                className={`mt-2 w-full max-w-xs rounded-xl border border-white/10 bg-background/80 px-3 py-2.5 text-sm text-foreground outline-none ring-primary/40 transition-opacity focus:ring-2 ${sportPending ? "opacity-50" : ""}`}
                 aria-label="Switch sport"
               >
                 {sports.map((s) => (
