@@ -133,7 +133,7 @@ export function PlayerClient({
 }) {
   const router = useRouter();
   const chartData = buildChartData(chartGames);
-  const net = chartData.length > 0 ? chartData[chartData.length - 1].cumulative : 0;
+  const net = record.wins - record.losses;
   const played = record.wins + record.losses + record.ties;
 
   return (
