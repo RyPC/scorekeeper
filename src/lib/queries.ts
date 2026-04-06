@@ -92,6 +92,15 @@ export async function fetchRecentOpponentsForUser(userId: string) {
   return ids.map((id) => userMap.get(id)!).filter(Boolean);
 }
 
+export async function fetchSportNamesForIds(
+  ids: string[]
+): Promise<Record<string, string>> {
+  if (ids.length === 0) return {};
+  const sb = createServiceClient();
+  const { data } = await sb.from("sports").select("id, name").in("id", ids);
+  return Object.fromEntries((data ?? []).map((s) => [s.id, s.name]));
+}
+
 /** All games between two specific players, ordered chronologically. */
 export async function fetchGamesVsFriend(
   userId: string,

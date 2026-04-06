@@ -3,7 +3,7 @@
 import { getH2HGames } from "@/app/actions/games";
 import { scoresForUser, type GameRow } from "@/lib/game-stats";
 import { format } from "date-fns";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CartesianGrid,
   Line,
@@ -79,19 +79,12 @@ function CustomTooltip({
   );
 }
 
-function H2HChart({
-  data,
-  userId,
-}: {
-  data: ChartPoint[];
-  userId: string;
-}) {
+function H2HChart({ data }: { data: ChartPoint[] }) {
   if (data.length === 0) return null;
 
   const maxVal = Math.max(...data.map((d) => d.cumulative));
   const minVal = Math.min(...data.map((d) => d.cumulative));
 
-  // Find first occurrence of peak and trough
   const peakPoint = maxVal > 0 ? data.find((d) => d.cumulative === maxVal) : undefined;
   const troughPoint = minVal < 0 ? data.find((d) => d.cumulative === minVal) : undefined;
 
@@ -157,14 +150,18 @@ export function FriendH2HModal({
   onClose: () => void;
 }) {
   const [loading, setLoading] = useState(false);
-  const [chartData, setChartData] = useState<ChartPoint[] | null>(null);
+  const [allGames, setAllGames] = useState<GameRow[] | null>(null);
+  const [sportNames, setSportNames] = useState<Record<string, string>>({});
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [selectedSportId, setSelectedSportId] = useState<string | null>(null);
   const prevFriendId = useRef<string | null>(null);
 
   useEffect(() => {
     if (!friend) {
-      setChartData(null);
+      setAllGames(null);
+      setSportNames({});
       setFetchError(null);
+      setSelectedSportId(null);
       prevFriendId.current = null;
       return;
     }
@@ -172,18 +169,46 @@ export function FriendH2HModal({
     prevFriendId.current = friend.id;
 
     setLoading(true);
-    setChartData(null);
+    setAllGames(null);
+    setSportNames({});
     setFetchError(null);
+    setSelectedSportId(null);
 
     getH2HGames(friend.id).then((res) => {
       setLoading(false);
       if (res.error) {
         setFetchError(res.error);
       } else {
-        setChartData(buildChartData(res.data ?? [], userId));
+        setAllGames(res.data ?? []);
+        setSportNames(res.sportNames ?? {});
       }
     });
-  }, [friend, userId]);
+  }, [friend]);
+
+  // Sports that appear in the H2H games
+  const sportsWithGames = useMemo(() => {
+    if (!allGames) return [];
+    const seen = new Set<string>();
+    const result: { id: string; name: string }[] = [];
+    for (const g of allGames) {
+      if (!seen.has(g.sport_id)) {
+        seen.add(g.sport_id);
+        result.push({ id: g.sport_id, name: sportNames[g.sport_id] ?? "Unknown" });
+      }
+    }
+    return result;
+  }, [allGames, sportNames]);
+
+  const filteredGames = useMemo(() => {
+    if (!allGames) return null;
+    if (!selectedSportId) return allGames;
+    return allGames.filter((g) => g.sport_id === selectedSportId);
+  }, [allGames, selectedSportId]);
+
+  const chartData = useMemo(
+    () => (filteredGames ? buildChartData(filteredGames, userId) : null),
+    [filteredGames, userId]
+  );
 
   if (!friend) return null;
 
@@ -226,6 +251,37 @@ export function FriendH2HModal({
           </button>
         </div>
 
+        {/* Sport filter pills */}
+        {sportsWithGames.length > 1 ? (
+          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5 scrollbar-none">
+            <button
+              type="button"
+              onClick={() => setSelectedSportId(null)}
+              className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                selectedSportId === null
+                  ? "bg-primary text-[#121212]"
+                  : "border border-white/15 text-muted hover:border-white/30 hover:text-foreground"
+              }`}
+            >
+              All
+            </button>
+            {sportsWithGames.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => setSelectedSportId(s.id)}
+                className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                  selectedSportId === s.id
+                    ? "bg-primary text-[#121212]"
+                    : "border border-white/15 text-muted hover:border-white/30 hover:text-foreground"
+                }`}
+              >
+                {s.name}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
         {/* Summary pills */}
         {chartData && chartData.length > 0 ? (
           <div className="flex gap-2">
@@ -266,11 +322,11 @@ export function FriendH2HModal({
           </div>
         ) : chartData && chartData.length === 0 ? (
           <div className="flex h-52 items-center justify-center rounded-xl border border-dashed border-white/15 bg-card/30 text-sm text-muted">
-            No games played yet.
+            {selectedSportId ? "No games in this sport yet." : "No games played yet."}
           </div>
         ) : chartData ? (
           <div>
-            <H2HChart data={chartData} userId={userId} />
+            <H2HChart data={chartData} />
             <p className="mt-2 text-center text-[10px] text-muted">
               Green dot = personal best · Red dot = worst point · Dashed line = break even
             </p>
