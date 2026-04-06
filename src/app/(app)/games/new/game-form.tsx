@@ -5,7 +5,7 @@ import { createSport } from "@/app/actions/sports";
 import { UserAvatar } from "@/components/UserAvatar";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 type UserRow = {
   id: string;
@@ -15,13 +15,249 @@ type UserRow = {
 
 type SportRow = { id: string; name: string };
 
+function SportPicker({
+  sports,
+  selectedId,
+  onSelect,
+  onCreateNew,
+}: {
+  sports: SportRow[];
+  selectedId: string;
+  onSelect: (id: string) => void;
+  onCreateNew: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  const selectedSport = sports.find((s) => s.id === selectedId);
+
+  const displayList = search.trim()
+    ? sports.filter((s) => s.name.toLowerCase().includes(search.toLowerCase()))
+    : sports;
+
+  function handleOpen() {
+    setOpen(true);
+    setTimeout(() => searchRef.current?.focus(), 0);
+  }
+
+  function handleSelect(id: string) {
+    onSelect(id);
+    setOpen(false);
+    setSearch("");
+  }
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={handleOpen}
+        className="mt-1 flex w-full items-center justify-between rounded-lg border border-white/10 bg-background px-3 py-2.5 text-sm outline-none ring-primary/40 focus:ring-2"
+      >
+        {selectedSport ? (
+          <span className="text-foreground">{selectedSport.name}</span>
+        ) : (
+          <span className="text-muted">Select sport</span>
+        )}
+        <svg
+          className={`h-4 w-4 text-muted transition-transform ${open ? "rotate-180" : ""}`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && (
+        <>
+          <div
+            className="fixed inset-0 z-10"
+            onClick={() => {
+              setOpen(false);
+              setSearch("");
+            }}
+          />
+          <div className="absolute z-20 mt-1 w-full rounded-lg border border-white/10 bg-card shadow-xl">
+            <div className="border-b border-white/10 p-2">
+              <input
+                ref={searchRef}
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search sports…"
+                className="w-full rounded-md border border-white/10 bg-background px-3 py-2 text-sm text-foreground outline-none ring-primary/40 placeholder:text-muted focus:ring-2"
+              />
+            </div>
+            <div className="max-h-52 overflow-y-auto">
+              {displayList.length === 0 && search.trim() ? (
+                <p className="px-3 py-3 text-sm text-muted">No results</p>
+              ) : (
+                displayList.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => handleSelect(s.id)}
+                    className={`flex w-full items-center px-3 py-2.5 text-sm hover:bg-white/5 ${
+                      s.id === selectedId ? "text-primary" : "text-foreground"
+                    }`}
+                  >
+                    {s.name}
+                  </button>
+                ))
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  setSearch("");
+                  onCreateNew();
+                }}
+                className="flex w-full items-center border-t border-white/10 px-3 py-2.5 text-sm text-primary hover:bg-white/5"
+              >
+                ＋ New sport…
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function OpponentPicker({
+  recentOpponents,
+  allOpponents,
+  selectedId,
+  onSelect,
+  disabled,
+}: {
+  recentOpponents: UserRow[];
+  allOpponents: UserRow[];
+  selectedId: string;
+  onSelect: (id: string) => void;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  const selectedUser = allOpponents.find((u) => u.id === selectedId);
+
+  const displayList = search.trim()
+    ? allOpponents.filter((u) =>
+        u.username.toLowerCase().includes(search.toLowerCase())
+      )
+    : recentOpponents;
+
+  function handleOpen() {
+    if (disabled) return;
+    setOpen(true);
+    // focus search on next tick after render
+    setTimeout(() => searchRef.current?.focus(), 0);
+  }
+
+  function handleSelect(id: string) {
+    onSelect(id);
+    setOpen(false);
+    setSearch("");
+  }
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={handleOpen}
+        className="mt-1 flex w-full items-center justify-between rounded-lg border border-white/10 bg-background px-3 py-2.5 text-sm outline-none ring-primary/40 focus:ring-2 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {selectedUser ? (
+          <span className="flex items-center gap-2">
+            <UserAvatar
+              username={selectedUser.username}
+              avatarUrl={selectedUser.avatar_url}
+              size="sm"
+            />
+            <span className="text-foreground">{selectedUser.username}</span>
+          </span>
+        ) : (
+          <span className="text-muted">Select opponent</span>
+        )}
+        <svg
+          className={`h-4 w-4 text-muted transition-transform ${open ? "rotate-180" : ""}`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && (
+        <>
+          {/* backdrop */}
+          <div
+            className="fixed inset-0 z-10"
+            onClick={() => {
+              setOpen(false);
+              setSearch("");
+            }}
+          />
+          <div className="absolute z-20 mt-1 w-full rounded-lg border border-white/10 bg-card shadow-xl">
+            <div className="border-b border-white/10 p-2">
+              <input
+                ref={searchRef}
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search opponents…"
+                className="w-full rounded-md border border-white/10 bg-background px-3 py-2 text-sm text-foreground outline-none ring-primary/40 placeholder:text-muted focus:ring-2"
+              />
+            </div>
+            <div className="max-h-52 overflow-y-auto">
+              {!search.trim() && recentOpponents.length > 0 && (
+                <p className="px-3 pb-1 pt-2 text-xs text-muted">Recently played</p>
+              )}
+              {displayList.length === 0 ? (
+                <p className="px-3 py-3 text-sm text-muted">No results</p>
+              ) : (
+                displayList.map((u) => (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => handleSelect(u.id)}
+                    className={`flex w-full items-center gap-2 px-3 py-2.5 text-sm hover:bg-white/5 ${
+                      u.id === selectedId ? "text-primary" : "text-foreground"
+                    }`}
+                  >
+                    <UserAvatar
+                      username={u.username}
+                      avatarUrl={u.avatar_url}
+                      size="sm"
+                    />
+                    {u.username}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export function GameForm({
   sports: initialSports,
   opponents,
+  recentOpponents,
   initialSportId,
 }: {
   sports: SportRow[];
   opponents: UserRow[];
+  recentOpponents: UserRow[];
   initialSportId: string | null;
 }) {
   const router = useRouter();
@@ -33,8 +269,9 @@ export function GameForm({
   const [newSportName, setNewSportName] = useState("");
   const [newSportError, setNewSportError] = useState<string | null>(null);
   const [newSportPending, setNewSportPending] = useState(false);
+  const [selectedOpponentId, setSelectedOpponentId] = useState<string>("");
 
-  const canSubmit = sports.length > 0 && opponents.length > 0;
+  const canSubmit = sports.length > 0 && opponents.length > 0 && !!selectedOpponentId;
   const blockReason =
     sports.length === 0
       ? "no-sports"
@@ -90,42 +327,18 @@ export function GameForm({
       action={handleSubmit}
       className="flex flex-col gap-4 rounded-xl border border-white/10 bg-card p-4"
     >
-      <p className="rounded-lg border border-white/10 bg-background/60 px-3 py-2.5 text-xs leading-relaxed text-muted">
-        <span className="font-medium text-foreground">Opponent</span> is anyone with a
-        profile here. <span className="font-medium text-foreground">Friends</span> only
-        affect your dashboard highlights—you can still log games against people you
-        haven&apos;t added.
-      </p>
-
       <div>
-        <label htmlFor="sport_id" className="text-xs font-medium text-muted">
-          Sport
-        </label>
-        <select
-          id="sport_id"
-          name="sport_id"
-          required
-          value={selectedSportId}
-          onChange={(e) => {
-            if (e.target.value === "__new__") {
-              setShowNewSport(true);
-            } else {
-              setSelectedSportId(e.target.value);
-              setShowNewSport(false);
-            }
+        <label className="text-xs font-medium text-muted">Sport</label>
+        <input type="hidden" name="sport_id" value={selectedSportId} />
+        <SportPicker
+          sports={sports}
+          selectedId={selectedSportId}
+          onSelect={(id) => {
+            setSelectedSportId(id);
+            setShowNewSport(false);
           }}
-          className="mt-1 w-full rounded-lg border border-white/10 bg-background px-3 py-2.5 text-sm text-foreground outline-none ring-primary/40 focus:ring-2"
-        >
-          <option value="" disabled>
-            Select sport
-          </option>
-          {sports.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-          <option value="__new__">＋ New sport…</option>
-        </select>
+          onCreateNew={() => setShowNewSport(true)}
+        />
         {showNewSport ? (
           <form onSubmit={handleCreateSport} className="mt-2 flex gap-2">
             <input
@@ -144,7 +357,11 @@ export function GameForm({
             </button>
             <button
               type="button"
-              onClick={() => { setShowNewSport(false); setNewSportName(""); setNewSportError(null); }}
+              onClick={() => {
+                setShowNewSport(false);
+                setNewSportName("");
+                setNewSportError(null);
+              }}
               className="rounded-lg border border-white/10 px-3 py-2 text-sm text-muted hover:text-foreground"
             >
               Cancel
@@ -155,25 +372,16 @@ export function GameForm({
       </div>
 
       <div>
-        <label htmlFor="opponent_id" className="text-xs font-medium text-muted">
-          Opponent
-        </label>
-        <select
-          id="opponent_id"
-          name="opponent_id"
-          required
+        <label className="text-xs font-medium text-muted">Opponent</label>
+        {/* hidden input so FormData picks up the selected opponent */}
+        <input type="hidden" name="opponent_id" value={selectedOpponentId} />
+        <OpponentPicker
+          recentOpponents={recentOpponents}
+          allOpponents={opponents}
+          selectedId={selectedOpponentId}
+          onSelect={setSelectedOpponentId}
           disabled={opponents.length === 0}
-          className="mt-1 w-full rounded-lg border border-white/10 bg-background px-3 py-2.5 text-sm text-foreground outline-none ring-primary/40 focus:ring-2 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <option value="" disabled>
-            Select opponent
-          </option>
-          {opponents.map((f) => (
-            <option key={f.id} value={f.id}>
-              {f.username}
-            </option>
-          ))}
-        </select>
+        />
         {opponents.length === 0 ? (
           <p className="mt-2 text-xs text-muted">
             No other users yet. Ask someone else to open this app and tap{" "}
@@ -242,7 +450,7 @@ export function GameForm({
             <>
               <p className="font-semibold">Add a sport first</p>
               <p className="mt-1 text-muted">
-                Use the Sport dropdown above to create your first sport.
+                Use the Sport picker above to create your first sport.
               </p>
             </>
           ) : (
@@ -271,28 +479,6 @@ export function GameForm({
       >
         {pending ? "Logging…" : "Log game"}
       </button>
-
-      {opponents.length > 0 ? (
-        <div className="flex flex-wrap gap-3 border-t border-white/10 pt-4">
-          <p className="w-full text-xs font-medium text-muted">Accounts you can play</p>
-          <div className="flex flex-wrap gap-2">
-            {opponents.slice(0, 12).map((f) => (
-              <div
-                key={f.id}
-                className="flex items-center gap-2 rounded-lg border border-white/10 bg-background/80 px-2 py-1.5"
-              >
-                <UserAvatar username={f.username} avatarUrl={f.avatar_url} size="sm" />
-                <span className="text-xs text-foreground">{f.username}</span>
-              </div>
-            ))}
-            {opponents.length > 12 ? (
-              <span className="self-center text-xs text-muted">
-                +{opponents.length - 12} more
-              </span>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
     </form>
   );
 }
