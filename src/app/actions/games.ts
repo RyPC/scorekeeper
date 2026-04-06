@@ -80,30 +80,19 @@ export async function addGame(formData: FormData) {
       return { error: "A player cannot be on both teams or appear twice." };
     }
 
-    // team captains stored in player1_id / player2_id for backwards-compat queries
-    const { data: gameRow, error: gameError } = await sb
-      .from("games")
-      .insert({
-        sport_id: sportId,
-        game_type: gameType,
-        player1_id: userId,
-        player2_id: theirTeam[0],
-        player1_score: myScore,
-        player2_score: theirScore,
-        notes,
-      })
-      .select("id")
-      .single();
+    const { error: teamGameError } = await sb.rpc("create_team_game", {
+      p_sport_id: sportId,
+      p_game_type: gameType,
+      p_player1_id: userId,
+      p_player2_id: theirTeam[0],
+      p_player1_score: myScore,
+      p_player2_score: theirScore,
+      p_notes: notes,
+      p_team1_ids: myTeam,
+      p_team2_ids: theirTeam,
+    });
 
-    if (gameError || !gameRow) return { error: gameError?.message ?? "Failed to create game." };
-
-    const rosterRows = [
-      ...myTeam.map((uid) => ({ game_id: gameRow.id, user_id: uid, team: 1 })),
-      ...theirTeam.map((uid) => ({ game_id: gameRow.id, user_id: uid, team: 2 })),
-    ];
-
-    const { error: rosterError } = await sb.from("game_players").insert(rosterRows);
-    if (rosterError) return { error: rosterError.message };
+    if (teamGameError) return { error: teamGameError.message };
   }
 
   revalidatePath("/dashboard");
