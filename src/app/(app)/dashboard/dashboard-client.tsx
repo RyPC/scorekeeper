@@ -1,7 +1,12 @@
 "use client";
 
 import { UserAvatar } from "@/components/UserAvatar";
-import { scoresForUser, type GameRow } from "@/lib/game-stats";
+import {
+  areOpponentsInGame,
+  scoresForUser,
+  teamForUser,
+  type GameRow,
+} from "@/lib/game-stats";
 import { format } from "date-fns";
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -16,18 +21,37 @@ type Props = {
   currentUser: UserRow;
   sports: { id: string; name: string; created_at: string }[];
   games: GameRow[];
-  opponentMap: Record<string, UserRow>;
+  userMap: Record<string, UserRow>;
   friends: UserRow[];
 };
+
+/** Names of all players on the opposing side of `userId` in a game. */
+function opposingNames(game: GameRow, userId: string, userMap: Record<string, UserRow>): string {
+  if (game.game_type !== "1v1") {
+    const side = teamForUser(game, userId);
+    if (game.game_players && game.game_players.length > 0 && side !== null) {
+      const oppTeam = side === 1 ? 2 : 1;
+      return game.game_players
+        .filter((p) => p.team === oppTeam)
+        .map((p) => userMap[p.user_id]?.username ?? "Unknown")
+        .join(", ");
+    }
+    if (side !== null) {
+      const oppCaptainId = side === 1 ? game.player2_id : game.player1_id;
+      return userMap[oppCaptainId]?.username ?? "Unknown";
+    }
+  }
+  const oppId = game.player1_id === userId ? game.player2_id : game.player1_id;
+  return userMap[oppId]?.username ?? "Unknown";
+}
 
 export function DashboardClient({
   currentUser,
   sports,
   games,
-  opponentMap,
+  userMap,
   friends,
 }: Props) {
-  // Sports that have at least one game
   const sportsWithGames = useMemo(() => {
     const sportIdsWithGames = new Set(games.map((g) => g.sport_id));
     return sports.filter((s) => sportIdsWithGames.has(s.id));
@@ -37,7 +61,6 @@ export function DashboardClient({
     () => sportsWithGames[0]?.id ?? null
   );
 
-  // Keep selectedSportId valid if sportsWithGames changes
   const activeSportId =
     selectedSportId && sportsWithGames.some((s) => s.id === selectedSportId)
       ? selectedSportId
@@ -59,8 +82,8 @@ export function DashboardClient({
         let wins = 0;
         let losses = 0;
         for (const g of filteredGames) {
-          const other = g.player1_id === currentUser.id ? g.player2_id : g.player1_id;
-          if (other !== f.id) continue;
+          if (!areOpponentsInGame(g, currentUser.id, f.id)) continue;
+
           const s = scoresForUser(g, currentUser.id);
           if (s.won) wins++;
           else if (s.lost) losses++;
@@ -189,10 +212,9 @@ export function DashboardClient({
         ) : (
           <ul className="mt-4 flex flex-col gap-3">
             {recentGames.map((g) => {
-              const oppId =
-                g.player1_id === currentUser.id ? g.player2_id : g.player1_id;
-              const opp = opponentMap[oppId];
               const s = scoresForUser(g, currentUser.id);
+              const oppNames = opposingNames(g, currentUser.id, userMap);
+              const isTeam = g.game_type !== "1v1";
               return (
                 <li
                   key={g.id}
@@ -201,9 +223,14 @@ export function DashboardClient({
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate font-medium text-foreground">
-                        vs {opp?.username ?? "Unknown"}
+                        vs {oppNames}
                       </p>
                       <p className="text-xs text-muted">
+                        {isTeam ? (
+                          <span className="mr-1.5 rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide">
+                            {g.game_type}
+                          </span>
+                        ) : null}
                         {format(new Date(g.created_at), "MMM d, yyyy · h:mm a")}
                       </p>
                     </div>
@@ -225,7 +252,6 @@ export function DashboardClient({
           </ul>
         )}
       </section>
-
     </div>
   );
 }

@@ -18,19 +18,24 @@ export default async function StatsPage() {
     fetchGamesForUser(userId, null),
   ]);
 
-  const opponentIds = [
-    ...new Set(
-      games.map((g) => (g.player1_id === userId ? g.player2_id : g.player1_id))
-    ),
-  ];
-  const opponents = await fetchUsersByIds(opponentIds);
-  const opponentMap = Object.fromEntries(opponents.map((u) => [u.id, u]));
+  const playerIdSet = new Set<string>();
+  for (const g of games) {
+    playerIdSet.add(g.player1_id);
+    playerIdSet.add(g.player2_id);
+    if (g.game_players) {
+      for (const p of g.game_players) {
+        playerIdSet.add(p.user_id);
+      }
+    }
+  }
+  const players = await fetchUsersByIds([...playerIdSet]);
+  const userMap = Object.fromEntries(players.map((u) => [u.id, u]));
 
   return (
     <StatsClient
       sports={sports}
       games={games}
-      opponentMap={opponentMap}
+      userMap={userMap}
       userId={userId}
     />
   );

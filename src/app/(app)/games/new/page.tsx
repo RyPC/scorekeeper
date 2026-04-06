@@ -43,7 +43,12 @@ export default async function NewGamePage({
           .
         </p>
       </div>
-      <GameForm sports={sports} opponents={opponents} initialSportId={sportId} />
+      <GameForm
+        sports={sports}
+        opponents={opponents}
+        currentUserId={userId}
+        initialSportId={sportId}
+      />
     </div>
   );
 }

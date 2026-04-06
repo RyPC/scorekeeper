@@ -1,7 +1,7 @@
 "use client";
 
 import { UserAvatar } from "@/components/UserAvatar";
-import { scoresForUser, type GameRow } from "@/lib/game-stats";
+import { opponentUserIdsForGame, scoresForUser, type GameRow } from "@/lib/game-stats";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
@@ -91,12 +91,12 @@ function MarginPerGameChart({ data }: { data: ChartRow[] }) {
 export function StatsClient({
   sports,
   games,
-  opponentMap,
+  userMap,
   userId,
 }: {
   sports: SportRow[];
   games: GameRow[];
-  opponentMap: Record<string, UserRow>;
+  userMap: Record<string, UserRow>;
   userId: string;
 }) {
   const [selectedSportId, setSelectedSportId] = useState<string | null>(null);
@@ -128,19 +128,22 @@ export function StatsClient({
   const byOpponent = useMemo(() => {
     const byOpp: Record<string, { wins: number; losses: number; ties: number; pf: number; pa: number }> = {};
     for (const g of filteredGames) {
-      const oid = g.player1_id === userId ? g.player2_id : g.player1_id;
-      if (!byOpp[oid]) byOpp[oid] = { wins: 0, losses: 0, ties: 0, pf: 0, pa: 0 };
+      const oppIds = opponentUserIdsForGame(g, userId);
+      if (oppIds.length === 0) continue;
       const s = scoresForUser(g, userId);
-      byOpp[oid].pf += s.mine;
-      byOpp[oid].pa += s.theirs;
-      if (s.won) byOpp[oid].wins++;
-      else if (s.lost) byOpp[oid].losses++;
-      else byOpp[oid].ties++;
+      for (const oid of oppIds) {
+        if (!byOpp[oid]) byOpp[oid] = { wins: 0, losses: 0, ties: 0, pf: 0, pa: 0 };
+        byOpp[oid].pf += s.mine;
+        byOpp[oid].pa += s.theirs;
+        if (s.won) byOpp[oid].wins++;
+        else if (s.lost) byOpp[oid].losses++;
+        else byOpp[oid].ties++;
+      }
     }
     return Object.entries(byOpp)
-      .map(([id, v]) => ({ opponent: opponentMap[id] as UserRow | undefined, ...v }))
+      .map(([id, v]) => ({ opponent: userMap[id] as UserRow | undefined, ...v }))
       .sort((a, b) => (b.wins + b.losses + b.ties) - (a.wins + a.losses + a.ties));
-  }, [filteredGames, userId, opponentMap]);
+  }, [filteredGames, userId, userMap]);
 
   const chartSeries = useMemo(() => {
     let winCum = 0;
@@ -191,10 +194,12 @@ export function StatsClient({
         </div>
       ) : null}
 
-      {/* 1v1 Matchups — primary */}
+      {/* Head-to-head — primary */}
       <section>
-        <h2 className="text-lg font-semibold tracking-tight">1v1 Matchups</h2>
-        <p className="mt-1 text-sm text-muted">Tap any row for the full history.</p>
+        <h2 className="text-lg font-semibold tracking-tight">Head-to-head</h2>
+        <p className="mt-1 text-sm text-muted">
+          Your record against each player (1v1 and team games). Tap a row for history.
+        </p>
         {byOpponent.length === 0 ? (
           <p className="mt-3 text-sm text-muted">No games recorded yet.</p>
         ) : (
