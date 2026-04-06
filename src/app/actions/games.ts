@@ -2,7 +2,7 @@
 
 import { getSessionUserId } from "@/lib/auth-server";
 import type { GameRow } from "@/lib/game-stats";
-import { fetchGamesVsFriend } from "@/lib/queries";
+import { fetchGamesVsFriend, fetchSportNamesForIds } from "@/lib/queries";
 import { createServiceClient } from "@/lib/supabase/service";
 import { revalidatePath } from "next/cache";
 
@@ -52,9 +52,11 @@ export async function addGame(formData: FormData) {
 
 export async function getH2HGames(
   friendId: string
-): Promise<{ data?: GameRow[]; error?: string }> {
+): Promise<{ data?: GameRow[]; sportNames?: Record<string, string>; error?: string }> {
   const userId = await getSessionUserId();
   if (!userId) return { error: "Not signed in." };
   const data = await fetchGamesVsFriend(userId, friendId);
-  return { data };
+  const sportIds = [...new Set(data.map((g) => g.sport_id))];
+  const sportNames = await fetchSportNamesForIds(sportIds);
+  return { data, sportNames };
 }
