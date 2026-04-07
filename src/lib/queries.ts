@@ -1,4 +1,4 @@
-import { areOpponentsInGame, type GameRow } from "@/lib/game-stats";
+import type { GameRow } from "@/lib/game-stats";
 import { createServiceClient } from "@/lib/supabase/service";
 
 export async function fetchSports() {
@@ -96,6 +96,54 @@ async function fetchGamesByIdsOrdered(
   return deduped;
 }
 
+/**
+ * Game IDs where both users were on opposing sides: `games.player1_id` / `player2_id`
+ * (1v1 and team captains), or both listed in `game_players` with different `team`.
+ */
+async function collectGameIdsBetweenOpponents(
+  sb: ReturnType<typeof createServiceClient>,
+  userId: string,
+  otherUserId: string
+): Promise<string[]> {
+  if (userId === otherUserId) return [];
+
+  const ids = new Set<string>();
+
+  const { data: capRows, error: capErr } = await sb
+    .from("games")
+    .select("id")
+    .or(
+      `and(player1_id.eq.${userId},player2_id.eq.${otherUserId}),and(player1_id.eq.${otherUserId},player2_id.eq.${userId})`
+    );
+  if (capErr) console.error(capErr);
+  for (const r of capRows ?? []) ids.add(r.id);
+
+  const { data: meRows, error: meErr } = await sb
+    .from("game_players")
+    .select("game_id, team")
+    .eq("user_id", userId);
+  if (meErr) console.error(meErr);
+
+  const { data: themRows, error: themErr } = await sb
+    .from("game_players")
+    .select("game_id, team")
+    .eq("user_id", otherUserId);
+  if (themErr) console.error(themErr);
+
+  const myByGame = new Map<string, number>();
+  for (const r of meRows ?? []) {
+    myByGame.set(r.game_id, r.team);
+  }
+
+  for (const r of themRows ?? []) {
+    const myTeam = myByGame.get(r.game_id);
+    if (myTeam === undefined) continue;
+    if (myTeam !== r.team) ids.add(r.game_id);
+  }
+
+  return [...ids];
+}
+
 export async function fetchGamesForUserSport(userId: string, sportId: string) {
   const sb = createServiceClient();
   const ids = await collectGameIdsForUser(sb, userId, sportId);
@@ -152,10 +200,9 @@ export async function fetchGamesVsFriend(
   friendId: string
 ): Promise<GameRow[]> {
   const sb = createServiceClient();
-  const ids = await collectGameIdsForUser(sb, userId, null);
+  const ids = await collectGameIdsBetweenOpponents(sb, userId, friendId);
   if (ids.length === 0) return [];
-  const rows = await fetchGamesByIdsOrdered(sb, ids, true);
-  return rows.filter((g) => areOpponentsInGame(g, userId, friendId));
+  return fetchGamesByIdsOrdered(sb, ids, true);
 }
 
 /** All games for a user, optionally filtered by sport (null = every sport). */
