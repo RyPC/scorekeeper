@@ -22,41 +22,133 @@ const SPORT_GAME_TYPES: { pattern: RegExp; types: GameType[] }[] = [
   { pattern: /pickleball/i, types: ["1v1", "2v2"] },
 ];
 
-function PlayerSelect({
+function PlayerPicker({
   name,
   label,
-  users,
+  placeholder = "Select player",
+  recentUsers,
+  allUsers,
   excluded,
   value,
   onChange,
 }: {
   name: string;
   label: string;
-  users: UserRow[];
+  placeholder?: string;
+  recentUsers: UserRow[];
+  allUsers: UserRow[];
   excluded: Set<string>;
   value: string;
   onChange: (id: string) => void;
 }) {
-  const available = users.filter((u) => u.id === value || !excluded.has(u.id));
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  const available = allUsers.filter((u) => u.id === value || !excluded.has(u.id));
+  const recentAvailable = recentUsers.filter((u) => u.id === value || !excluded.has(u.id));
+  const selectedUser = allUsers.find((u) => u.id === value);
+
+  const displayList = search.trim()
+    ? available.filter((u) => u.username.toLowerCase().includes(search.toLowerCase()))
+    : recentAvailable.length > 0
+      ? recentAvailable
+      : available;
+
+  const showRecentLabel = !search.trim() && recentAvailable.length > 0;
+
+  function handleOpen() {
+    setOpen(true);
+    setTimeout(() => searchRef.current?.focus(), 0);
+  }
+
+  function handleSelect(id: string) {
+    onChange(id);
+    setOpen(false);
+    setSearch("");
+  }
+
   return (
-    <div>
+    <div className="relative">
       <label className="text-xs font-medium text-muted">{label}</label>
-      <select
-        name={name}
-        required
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="mt-1 w-full rounded-lg border border-white/10 bg-background px-3 py-2.5 text-sm text-foreground outline-none ring-primary/40 focus:ring-2"
+      <input type="hidden" name={name} value={value} />
+      <button
+        type="button"
+        onClick={handleOpen}
+        className="mt-1 flex w-full items-center justify-between rounded-lg border border-white/10 bg-background px-3 py-2.5 text-sm outline-none ring-primary/40 focus:ring-2"
       >
-        <option value="" disabled>
-          Select player
-        </option>
-        {available.map((u) => (
-          <option key={u.id} value={u.id}>
-            {u.username}
-          </option>
-        ))}
-      </select>
+        {selectedUser ? (
+          <span className="flex items-center gap-2">
+            <UserAvatar
+              username={selectedUser.username}
+              avatarUrl={selectedUser.avatar_url}
+              size="sm"
+            />
+            <span className="text-foreground">{selectedUser.username}</span>
+          </span>
+        ) : (
+          <span className="text-muted">{placeholder}</span>
+        )}
+        <svg
+          className={`h-4 w-4 text-muted transition-transform ${open ? "rotate-180" : ""}`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && (
+        <>
+          <div
+            className="fixed inset-0 z-10"
+            onClick={() => {
+              setOpen(false);
+              setSearch("");
+            }}
+          />
+          <div className="absolute z-20 mt-1 w-full rounded-lg border border-white/10 bg-card shadow-xl">
+            <div className="border-b border-white/10 p-2">
+              <input
+                ref={searchRef}
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search players…"
+                className="w-full rounded-md border border-white/10 bg-background px-3 py-2 text-sm text-foreground outline-none ring-primary/40 placeholder:text-muted focus:ring-2"
+              />
+            </div>
+            <div className="max-h-52 overflow-y-auto">
+              {showRecentLabel && (
+                <p className="px-3 pb-1 pt-2 text-xs text-muted">Recently played</p>
+              )}
+              {displayList.length === 0 ? (
+                <p className="px-3 py-3 text-sm text-muted">No results</p>
+              ) : (
+                displayList.map((u) => (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => handleSelect(u.id)}
+                    className={`flex w-full items-center gap-2 px-3 py-2.5 text-sm hover:bg-white/5 ${
+                      u.id === value ? "text-primary" : "text-foreground"
+                    }`}
+                  >
+                    <UserAvatar
+                      username={u.username}
+                      avatarUrl={u.avatar_url}
+                      size="sm"
+                    />
+                    {u.username}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -516,11 +608,12 @@ export function GameForm({
                 const slotIndex = i; // myTeamSlots[0..teamSize-2]
                 const excluded = buildExcluded(slotIndex + 1, undefined);
                 return (
-                  <PlayerSelect
+                  <PlayerPicker
                     key={`my_team_${i + 1}`}
                     name={`my_team_${i + 1}`}
                     label={`Teammate ${i + 1}`}
-                    users={allUsers}
+                    recentUsers={recentOpponents}
+                    allUsers={allUsers}
                     excluded={excluded}
                     value={myTeamSlots[slotIndex]}
                     onChange={(id) => {
@@ -545,11 +638,12 @@ export function GameForm({
               {Array.from({ length: teamSize }, (_, i) => {
                 const excluded = buildExcluded(undefined, i);
                 return (
-                  <PlayerSelect
+                  <PlayerPicker
                     key={`their_team_${i}`}
                     name={`their_team_${i}`}
                     label={`Opponent ${i + 1}`}
-                    users={allUsers}
+                    recentUsers={recentOpponents}
+                    allUsers={allUsers}
                     excluded={excluded}
                     value={theirTeamSlots[i]}
                     onChange={(id) => {
