@@ -194,7 +194,42 @@ export async function fetchAllUsersExcept(userId: string) {
   return (data ?? []).filter((u) => u.id !== userId);
 }
 
-/** All games where both users faced each other (1v1 or opposing teams), chronological. */
+/** Up to 5 most recently played opponents, ordered by recency. */
+export async function fetchRecentOpponentsForUser(userId: string) {
+  const sb = createServiceClient();
+  const { data } = await sb
+    .from("games")
+    .select("player1_id, player2_id")
+    .or(`player1_id.eq.${userId},player2_id.eq.${userId}`)
+    .order("created_at", { ascending: false });
+
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  for (const row of data ?? []) {
+    const opponentId = row.player1_id === userId ? row.player2_id : row.player1_id;
+    if (!seen.has(opponentId)) {
+      seen.add(opponentId);
+      ids.push(opponentId);
+    }
+    if (ids.length === 5) break;
+  }
+
+  if (ids.length === 0) return [];
+  const users = await fetchUsersByIds(ids);
+  const userMap = new Map(users.map((u) => [u.id, u]));
+  return ids.map((id) => userMap.get(id)!).filter(Boolean);
+}
+
+export async function fetchSportNamesForIds(
+  ids: string[]
+): Promise<Record<string, string>> {
+  if (ids.length === 0) return {};
+  const sb = createServiceClient();
+  const { data } = await sb.from("sports").select("id, name").in("id", ids);
+  return Object.fromEntries((data ?? []).map((s) => [s.id, s.name]));
+}
+
+/** All games between two specific players, ordered chronologically. */
 export async function fetchGamesVsFriend(
   userId: string,
   friendId: string

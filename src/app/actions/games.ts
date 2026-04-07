@@ -1,6 +1,7 @@
 "use server";
 
 import { getSessionUserId } from "@/lib/auth-server";
+
 import type { GameRow, GameType } from "@/lib/game-stats";
 import { TEAM_SIZE } from "@/lib/game-stats";
 import { fetchGamesVsFriend } from "@/lib/queries";
@@ -102,9 +103,11 @@ export async function addGame(formData: FormData) {
 
 export async function getH2HGames(
   friendId: string
-): Promise<{ data?: GameRow[]; error?: string }> {
+): Promise<{ data?: GameRow[]; sportNames?: Record<string, string>; error?: string }> {
   const userId = await getSessionUserId();
   if (!userId) return { error: "Not signed in." };
   const data = await fetchGamesVsFriend(userId, friendId);
-  return { data };
+  const sportIds = [...new Set(data.map((g) => g.sport_id))];
+  const sportNames = await fetchSportNamesForIds(sportIds);
+  return { data, sportNames };
 }

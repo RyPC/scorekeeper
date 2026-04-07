@@ -1,8 +1,10 @@
 "use client";
 
 import { UserAvatar } from "@/components/UserAvatar";
+import { scoresForUser, type GameRow } from "@/lib/game-stats";
 import { format } from "date-fns";
 import { useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
 import {
   CartesianGrid,
   Line,
@@ -17,39 +19,30 @@ import {
 
 type UserRow = { id: string; username: string; avatar_url: string | null };
 
-type ChartGame = {
-  id: string;
-  createdAt: string;
-  myScore: number;
-  theirScore: number;
-  result: "W" | "L" | "T";
-};
-
-type RecentGame = ChartGame & { sportName: string; notes: string | null };
-
 type ChartPoint = {
   index: number;
   label: string;
-  winRate: number; // 0–100
+  winRate: number;
   date: string;
   myScore: number;
   theirScore: number;
   result: "W" | "L" | "T";
 };
 
-function buildChartData(games: ChartGame[]): ChartPoint[] {
+function buildChartData(games: GameRow[], userId: string): ChartPoint[] {
   let wins = 0;
   return games.map((g, i) => {
-    if (g.result === "W") wins++;
+    const s = scoresForUser(g, userId);
+    if (s.won) wins++;
     const played = i + 1;
     return {
       index: played,
       label: `G${played}`,
       winRate: Math.round((wins / played) * 100),
-      date: format(new Date(g.createdAt), "MMM d, yyyy"),
-      myScore: g.myScore,
-      theirScore: g.theirScore,
-      result: g.result,
+      date: format(new Date(g.created_at), "MMM d, yyyy"),
+      myScore: s.mine,
+      theirScore: s.theirs,
+      result: s.won ? "W" : s.lost ? "L" : "T",
     };
   });
 }
@@ -120,19 +113,88 @@ function H2HChart({ data }: { data: ChartPoint[] }) {
 
 export function PlayerClient({
   opponent,
-  record,
-  bySport,
-  recentGames,
-  chartGames,
+  currentUserId,
+  allGames,
+  sportMap,
 }: {
   opponent: UserRow;
-  record: { wins: number; losses: number; ties: number };
-  bySport: { name: string; wins: number; losses: number; ties: number }[];
-  recentGames: RecentGame[];
-  chartGames: ChartGame[];
+  currentUserId: string;
+  allGames: GameRow[];
+  sportMap: Record<string, string>;
 }) {
   const router = useRouter();
-  const chartData = buildChartData(chartGames);
+
+  // Sports that appear in these H2H games, in encounter order
+  const sportsWithGames = useMemo(() => {
+    const seen = new Set<string>();
+    const result: { id: string; name: string }[] = [];
+    for (const g of allGames) {
+      if (!seen.has(g.sport_id)) {
+        seen.add(g.sport_id);
+        result.push({ id: g.sport_id, name: sportMap[g.sport_id] ?? "Unknown" });
+      }
+    }
+    return result;
+  }, [allGames, sportMap]);
+
+  const [selectedSportId, setSelectedSportId] = useState<string | null>(null);
+
+  const filteredGames = useMemo(
+    () => (selectedSportId ? allGames.filter((g) => g.sport_id === selectedSportId) : allGames),
+    [allGames, selectedSportId]
+  );
+
+  const record = useMemo(() => {
+    let wins = 0, losses = 0, ties = 0;
+    for (const g of filteredGames) {
+      const s = scoresForUser(g, currentUserId);
+      if (s.won) wins++;
+      else if (s.lost) losses++;
+      else ties++;
+    }
+    return { wins, losses, ties };
+  }, [filteredGames, currentUserId]);
+
+  // By-sport breakdown always uses all games (summary view)
+  const bySport = useMemo(() => {
+    const map: Record<string, { name: string; wins: number; losses: number; ties: number }> = {};
+    for (const g of allGames) {
+      const s = scoresForUser(g, currentUserId);
+      if (!map[g.sport_id]) {
+        map[g.sport_id] = { name: sportMap[g.sport_id] ?? "Unknown", wins: 0, losses: 0, ties: 0 };
+      }
+      if (s.won) map[g.sport_id].wins++;
+      else if (s.lost) map[g.sport_id].losses++;
+      else map[g.sport_id].ties++;
+    }
+    return Object.values(map).sort(
+      (a, b) => (b.wins + b.losses + b.ties) - (a.wins + a.losses + a.ties)
+    );
+  }, [allGames, currentUserId, sportMap]);
+
+  const recentGames = useMemo(() => {
+    return [...filteredGames]
+      .reverse()
+      .slice(0, 20)
+      .map((g) => {
+        const s = scoresForUser(g, currentUserId);
+        return {
+          id: g.id,
+          sportName: sportMap[g.sport_id] ?? "Unknown",
+          createdAt: g.created_at,
+          myScore: s.mine,
+          theirScore: s.theirs,
+          result: s.won ? ("W" as const) : s.lost ? ("L" as const) : ("T" as const),
+          notes: g.notes ?? null,
+        };
+      });
+  }, [filteredGames, currentUserId, sportMap]);
+
+  const chartData = useMemo(
+    () => buildChartData(filteredGames, currentUserId),
+    [filteredGames, currentUserId]
+  );
+
   const net = record.wins - record.losses;
   const played = record.wins + record.losses + record.ties;
 
@@ -161,13 +223,49 @@ export function PlayerClient({
         </div>
       </div>
 
-      {/* Record summary */}
+      {/* Sport filter pills */}
+      {sportsWithGames.length > 1 ? (
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none">
+          <button
+            type="button"
+            onClick={() => setSelectedSportId(null)}
+            className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition ${
+              selectedSportId === null
+                ? "bg-primary text-[#121212]"
+                : "border border-white/15 text-muted hover:border-white/30 hover:text-foreground"
+            }`}
+          >
+            All
+          </button>
+          {sportsWithGames.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => setSelectedSportId(s.id)}
+              className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                selectedSportId === s.id
+                  ? "bg-primary text-[#121212]"
+                  : "border border-white/15 text-muted hover:border-white/30 hover:text-foreground"
+              }`}
+            >
+              {s.name}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {/* Content */}
       {played === 0 ? (
-        <p className="text-sm text-muted">No games played yet.</p>
+        <p className="text-sm text-muted">
+          {selectedSportId ? "No games in this sport yet." : "No games played yet."}
+        </p>
       ) : (
         <>
+          {/* Record summary */}
           <section className="rounded-2xl border border-primary/20 bg-gradient-to-br from-card via-card to-primary/[0.07] p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.04)]">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted">Overall record</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted">
+              {selectedSportId ? (sportMap[selectedSportId] ?? "Sport") : "Overall"} record
+            </p>
             <div className="mt-3 flex items-baseline gap-2 tabular-nums">
               <span className="text-4xl font-bold text-emerald-400">{record.wins}</span>
               <span className="text-xl text-muted">–</span>
@@ -223,8 +321,8 @@ export function PlayerClient({
             </section>
           ) : null}
 
-          {/* By sport */}
-          {bySport.length > 1 ? (
+          {/* By sport — only shown in "All" view when there are multiple sports */}
+          {!selectedSportId && bySport.length > 1 ? (
             <section>
               <h2 className="text-lg font-semibold tracking-tight">By sport</h2>
               <ul className="mt-3 flex flex-col gap-2">
