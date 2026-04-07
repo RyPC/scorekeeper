@@ -57,7 +57,10 @@ function PlayerSelect({
           </option>
         ))}
       </select>
- };
+    </div>
+  );
+}
+
 function SportPicker({
   sports,
   selectedId,
