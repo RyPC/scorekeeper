@@ -74,6 +74,7 @@ export function RatingsSection({
     SportModeRating["gameType"] | null
   >(null);
   const [friendsOnlyRatings, setFriendsOnlyRatings] = useState(false);
+  const friendIdSet = useMemo(() => new Set(friendIds), [friendIds]);
 
   const ratingSports = useMemo(
     () =>
@@ -207,6 +208,18 @@ export function RatingsSection({
                 {sport.sportName}
               </button>
             ))}
+            {/* <button
+              type="button"
+              onClick={() => setFriendsOnlyRatings((value) => !value)}
+              aria-pressed={friendsOnlyRatings}
+              className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                friendsOnlyRatings
+                  ? "bg-white text-[#121212]"
+                  : "border border-white/15 text-muted hover:border-white/30 hover:text-foreground"
+              }`}
+            >
+              Friends only {friendsOnlyRatings ? "on" : "off"}
+            </button> */}
           </div>
 
           {selectedRatingSportId ? (
@@ -237,29 +250,58 @@ export function RatingsSection({
                 : "No ratings available for this format yet."}
             </li>
           ) : (
-            visibleLeaderboard.map(({ user, userId: ratedUserId, rank, rating }) => (
-              <li
-                key={ratedUserId}
-                className="flex items-center gap-3 rounded-xl border border-white/10 bg-background/40 px-4 py-3"
-              >
-                <span className="w-8 text-sm font-semibold tabular-nums text-muted">#{rank}</span>
+            visibleLeaderboard.map(({ user, userId: ratedUserId, rank, rating }) => {
+              const isCurrentUser = ratedUserId === userId;
+              const isFriend = friendIdSet.has(ratedUserId);
+
+              return (
+                <li
+                  key={ratedUserId}
+                  className={`flex items-center gap-3 rounded-xl px-4 py-3 ${
+                    isCurrentUser
+                      ? "border border-primary/40 bg-primary/10"
+                      : "border border-white/10 bg-background/40"
+                  }`}
+                >
+                  <span
+                    className={`w-8 text-sm font-semibold tabular-nums ${
+                      isCurrentUser ? "text-primary" : "text-muted"
+                    }`}
+                  >
+                    #{rank}
+                  </span>
                 {user ? (
                   <UserAvatar username={user.username} avatarUrl={user.avatar_url} size="sm" />
                 ) : null}
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium text-foreground">
-                    {user?.username ?? "Unknown"}
+                  <p className="flex items-center gap-2 truncate font-medium text-foreground">
+                    <span className="truncate">{user?.username ?? "Unknown"}</span>
+                    {isCurrentUser ? (
+                      <span className="rounded-full border border-primary/30 bg-primary/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                        You
+                      </span>
+                    ) : null}
+                    {isFriend ? (
+                      <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">
+                        Friend
+                      </span>
+                    ) : null}
                   </p>
                   <p className="text-xs text-muted">
                     {rating.wins}-{rating.losses}
                     {rating.ties > 0 ? `-${rating.ties}` : ""} in {rating.games} games
                   </p>
                 </div>
-                <span className="text-lg font-semibold tabular-nums text-foreground">
+                <span
+                  className={`text-lg font-semibold tabular-nums ${
+                    isCurrentUser ? "text-primary" : "text-foreground"
+                  }`}
+                >
                   {rating.rating}
                 </span>
-              </li>
-            ))
+                </li>
+              );
+            })
           )}
         </ul>
       </div>
