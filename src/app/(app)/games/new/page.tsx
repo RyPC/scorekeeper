@@ -31,7 +31,7 @@ export default async function NewGamePage({
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold tracking-tight">Log game</h1>
-      <GameForm sports={sports} opponents={opponents} recentOpponents={recentOpponents} initialSportId={sportId} />
+      <GameForm sports={sports} opponents={opponents} recentOpponents={recentOpponents} currentUserId={userId} initialSportId={sportId} />
     </div>
   );
 }

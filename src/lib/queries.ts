@@ -7,21 +7,149 @@ export async function fetchSports() {
   return data ?? [];
 }
 
+/** Shapes a raw Supabase game row (with nested game_players) into GameRow. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toGameRow(raw: any): GameRow {
+  const { game_players, ...rest } = raw;
+  const gp = Array.isArray(game_players) ? game_players : undefined;
+  return {
+    ...rest,
+    game_type: rest.game_type ?? "1v1",
+    // Empty array is truthy in JS; treat as missing so team logic falls back to captains.
+    game_players: gp && gp.length > 0 ? gp : undefined,
+  } as GameRow;
+}
+
+const IN_CHUNK = 120;
+
+/**
+ * Game IDs where the user appears as player1/2 (captain or 1v1) or on the `game_players` roster.
+ * Team games list non-captains only in `game_players`, so captain-only filters miss them.
+ */
+async function collectGameIdsForUser(
+  sb: ReturnType<typeof createServiceClient>,
+  userId: string,
+  sportId: string | null
+): Promise<string[]> {
+  const ids = new Set<string>();
+
+  let capQ = sb.from("games").select("id").or(`player1_id.eq.${userId},player2_id.eq.${userId}`);
+  if (sportId) capQ = capQ.eq("sport_id", sportId);
+  const { data: capRows, error: capErr } = await capQ;
+  if (capErr) console.error(capErr);
+  for (const row of capRows ?? []) ids.add(row.id);
+
+  const { data: rosterRows, error: rosterErr } = await sb
+    .from("game_players")
+    .select("game_id")
+    .eq("user_id", userId);
+  if (rosterErr) console.error(rosterErr);
+
+  let rosterGameIds = [...new Set((rosterRows ?? []).map((r) => r.game_id))];
+
+  if (sportId && rosterGameIds.length > 0) {
+    const inSport: string[] = [];
+    for (let i = 0; i < rosterGameIds.length; i += IN_CHUNK) {
+      const chunk = rosterGameIds.slice(i, i + IN_CHUNK);
+      const { data: rows, error: fErr } = await sb
+        .from("games")
+        .select("id")
+        .in("id", chunk)
+        .eq("sport_id", sportId);
+      if (fErr) console.error(fErr);
+      for (const r of rows ?? []) inSport.push(r.id);
+    }
+    rosterGameIds = inSport;
+  }
+
+  for (const id of rosterGameIds) ids.add(id);
+
+  return [...ids];
+}
+
+async function fetchGamesByIdsOrdered(
+  sb: ReturnType<typeof createServiceClient>,
+  ids: string[],
+  ascending: boolean
+): Promise<GameRow[]> {
+  if (ids.length === 0) return [];
+  const rows: GameRow[] = [];
+  for (let i = 0; i < ids.length; i += IN_CHUNK) {
+    const chunk = ids.slice(i, i + IN_CHUNK);
+    const { data, error } = await sb.from("games").select("*, game_players(*)").in("id", chunk);
+    if (error) {
+      console.error(error);
+      continue;
+    }
+    rows.push(...(data ?? []).map(toGameRow));
+  }
+  const byId = new Map<string, GameRow>();
+  for (const g of rows) {
+    byId.set(g.id, g);
+  }
+  const deduped = [...byId.values()];
+  deduped.sort((a, b) => {
+    const ta = new Date(a.created_at).getTime();
+    const tb = new Date(b.created_at).getTime();
+    return ascending ? ta - tb : tb - ta;
+  });
+  return deduped;
+}
+
+/**
+ * Game IDs where both users were on opposing sides: `games.player1_id` / `player2_id`
+ * (1v1 and team captains), or both listed in `game_players` with different `team`.
+ */
+async function collectGameIdsBetweenOpponents(
+  sb: ReturnType<typeof createServiceClient>,
+  userId: string,
+  otherUserId: string
+): Promise<string[]> {
+  if (userId === otherUserId) return [];
+
+  const ids = new Set<string>();
+
+  const { data: capRows, error: capErr } = await sb
+    .from("games")
+    .select("id")
+    .or(
+      `and(player1_id.eq.${userId},player2_id.eq.${otherUserId}),and(player1_id.eq.${otherUserId},player2_id.eq.${userId})`
+    );
+  if (capErr) console.error(capErr);
+  for (const r of capRows ?? []) ids.add(r.id);
+
+  const { data: meRows, error: meErr } = await sb
+    .from("game_players")
+    .select("game_id, team")
+    .eq("user_id", userId);
+  if (meErr) console.error(meErr);
+
+  const { data: themRows, error: themErr } = await sb
+    .from("game_players")
+    .select("game_id, team")
+    .eq("user_id", otherUserId);
+  if (themErr) console.error(themErr);
+
+  const myByGame = new Map<string, number>();
+  for (const r of meRows ?? []) {
+    myByGame.set(r.game_id, r.team);
+  }
+
+  for (const r of themRows ?? []) {
+    const myTeam = myByGame.get(r.game_id);
+    if (myTeam === undefined) continue;
+    if (myTeam !== r.team) ids.add(r.game_id);
+  }
+
+  return [...ids];
+}
+
 export async function fetchGamesForUserSport(userId: string, sportId: string) {
   const sb = createServiceClient();
-  const { data, error } = await sb
-    .from("games")
-    .select("*")
-    .eq("sport_id", sportId)
-    .or(`player1_id.eq.${userId},player2_id.eq.${userId}`)
-    .order("created_at", { ascending: false })
-    .limit(20);
-
-  if (error) {
-    console.error(error);
-    return [] as GameRow[];
-  }
-  return (data ?? []) as GameRow[];
+  const ids = await collectGameIdsForUser(sb, userId, sportId);
+  if (ids.length === 0) return [] as GameRow[];
+  const rows = await fetchGamesByIdsOrdered(sb, ids, false);
+  return rows.slice(0, 20);
 }
 
 export async function fetchUsersByIds(ids: string[]) {
@@ -107,34 +235,15 @@ export async function fetchGamesVsFriend(
   friendId: string
 ): Promise<GameRow[]> {
   const sb = createServiceClient();
-  const { data, error } = await sb
-    .from("games")
-    .select("*")
-    .or(
-      `and(player1_id.eq.${userId},player2_id.eq.${friendId}),and(player1_id.eq.${friendId},player2_id.eq.${userId})`
-    )
-    .order("created_at", { ascending: true });
-  if (error) {
-    console.error(error);
-    return [];
-  }
-  return (data ?? []) as GameRow[];
+  const ids = await collectGameIdsBetweenOpponents(sb, userId, friendId);
+  if (ids.length === 0) return [];
+  return fetchGamesByIdsOrdered(sb, ids, true);
 }
 
 /** All games for a user, optionally filtered by sport (null = every sport). */
 export async function fetchGamesForUser(userId: string, sportId: string | null) {
   const sb = createServiceClient();
-  let q = sb
-    .from("games")
-    .select("*")
-    .or(`player1_id.eq.${userId},player2_id.eq.${userId}`);
-  if (sportId) {
-    q = q.eq("sport_id", sportId);
-  }
-  const { data, error } = await q.order("created_at", { ascending: true });
-  if (error) {
-    console.error(error);
-    return [] as GameRow[];
-  }
-  return (data ?? []) as GameRow[];
+  const ids = await collectGameIdsForUser(sb, userId, sportId);
+  if (ids.length === 0) return [] as GameRow[];
+  return fetchGamesByIdsOrdered(sb, ids, true);
 }
