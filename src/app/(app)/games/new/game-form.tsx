@@ -449,7 +449,12 @@ export function GameForm({
   }
   const [selectedOpponentId, setSelectedOpponentId] = useState<string>("");
 
-  const canSubmit = sports.length > 0 && opponents.length > 0 && !!selectedOpponentId;
+  const playersValid =
+    gameType === "1v1"
+      ? !!selectedOpponentId
+      : myTeamSlots.slice(0, teamSize - 1).every(Boolean) &&
+        theirTeamSlots.slice(0, teamSize).every(Boolean);
+  const canSubmit = sports.length > 0 && opponents.length > 0 && playersValid;
   const blockReason =
     sports.length === 0
       ? "no-sports"
