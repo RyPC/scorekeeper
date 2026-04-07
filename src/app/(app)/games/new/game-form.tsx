@@ -657,28 +657,6 @@ export function GameForm({
       >
         {pending ? "Logging…" : "Log game"}
       </button>
-
-      {opponents.length > 0 && gameType === "1v1" ? (
-        <div className="flex flex-wrap gap-3 border-t border-white/10 pt-4">
-          <p className="w-full text-xs font-medium text-muted">Accounts you can play</p>
-          <div className="flex flex-wrap gap-2">
-            {opponents.slice(0, 12).map((f) => (
-              <div
-                key={f.id}
-                className="flex items-center gap-2 rounded-lg border border-white/10 bg-background/80 px-2 py-1.5"
-              >
-                <UserAvatar username={f.username} avatarUrl={f.avatar_url} size="sm" />
-                <span className="text-xs text-foreground">{f.username}</span>
-              </div>
-            ))}
-            {opponents.length > 12 ? (
-              <span className="self-center text-xs text-muted">
-                +{opponents.length - 12} more
-              </span>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
     </form>
   );
 }
