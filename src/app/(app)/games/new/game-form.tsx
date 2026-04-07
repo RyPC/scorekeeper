@@ -332,9 +332,6 @@ export function GameForm({
     }
   }, [allowedGameTypes, gameType]);
 
-  // 1v1 opponent
-  const [opponentId, setOpponentId] = useState<string>("");
-
   // Team games: myTeam[0] is always currentUserId, slots 1..teamSize-1 are selected
   // theirTeam[0..teamSize-1] are selected
   const teamSize = TEAM_SIZE[gameType];
@@ -347,7 +344,7 @@ export function GameForm({
   function buildExcluded(skipMySlot?: number, skipTheirSlot?: number): Set<string> {
     const ids = new Set<string>([currentUserId]);
     if (gameType === "1v1") {
-      if (opponentId) ids.add(opponentId);
+      if (selectedOpponentId) ids.add(selectedOpponentId);
     } else {
       for (let i = 1; i < teamSize; i++) {
         if (i !== skipMySlot && myTeamSlots[i - 1]) ids.add(myTeamSlots[i - 1]);
@@ -481,50 +478,19 @@ export function GameForm({
           ))}
         </div>
       </div>
-      <div>
-        <label className="text-xs font-medium text-muted">Opponent</label>
-        {/* hidden input so FormData picks up the selected opponent */}
-        <input type="hidden" name="opponent_id" value={selectedOpponentId} />
-        <OpponentPicker
-          recentOpponents={recentOpponents}
-          allOpponents={opponents}
-          selectedId={selectedOpponentId}
-          onSelect={setSelectedOpponentId}
-          disabled={opponents.length === 0}
-        />
-        {opponents.length === 0 ? (
-          <p className="mt-2 text-xs text-muted">
-            No other users yet. Ask someone else to open this app and tap{" "}
-            <span className="text-foreground">Add new user</span> on the sign-in screen,
-            or sign out and create another profile yourself.
-          </p>
-        ) : null}
-      </div>
-
       {/* Players */}
       {gameType === "1v1" ? (
         <div>
-          <label htmlFor="opponent_id" className="text-xs font-medium text-muted">
-            Opponent
-          </label>
-          <select
-            id="opponent_id"
-            name="opponent_id"
-            required
-            value={opponentId}
-            onChange={(e) => setOpponentId(e.target.value)}
+          <label className="text-xs font-medium text-muted">Opponent</label>
+          {/* hidden input so FormData picks up the selected opponent */}
+          <input type="hidden" name="opponent_id" value={selectedOpponentId} />
+          <OpponentPicker
+            recentOpponents={recentOpponents}
+            allOpponents={opponents}
+            selectedId={selectedOpponentId}
+            onSelect={setSelectedOpponentId}
             disabled={opponents.length === 0}
-            className="mt-1 w-full rounded-lg border border-white/10 bg-background px-3 py-2.5 text-sm text-foreground outline-none ring-primary/40 focus:ring-2 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <option value="" disabled>
-              Select opponent
-            </option>
-            {opponents.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.username}
-              </option>
-            ))}
-          </select>
+          />
           {opponents.length === 0 ? (
             <p className="mt-2 text-xs text-muted">
               No other users yet. Ask someone else to open this app and tap{" "}
