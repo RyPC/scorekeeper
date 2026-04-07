@@ -7,6 +7,12 @@ export async function fetchSports() {
   return data ?? [];
 }
 
+export async function fetchAllUsers() {
+  const sb = createServiceClient();
+  const { data } = await sb.from("users").select("*").order("username");
+  return data ?? [];
+}
+
 /** Shapes a raw Supabase game row (with nested game_players) into GameRow. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toGameRow(raw: any): GameRow {
@@ -150,6 +156,19 @@ export async function fetchGamesForUserSport(userId: string, sportId: string) {
   if (ids.length === 0) return [] as GameRow[];
   const rows = await fetchGamesByIdsOrdered(sb, ids, false);
   return rows.slice(0, 20);
+}
+
+export async function fetchAllGames() {
+  const sb = createServiceClient();
+  const { data, error } = await sb
+    .from("games")
+    .select("*, game_players(*)")
+    .order("created_at", { ascending: true });
+  if (error) {
+    console.error(error);
+    return [] as GameRow[];
+  }
+  return (data ?? []).map(toGameRow);
 }
 
 export async function fetchUsersByIds(ids: string[]) {

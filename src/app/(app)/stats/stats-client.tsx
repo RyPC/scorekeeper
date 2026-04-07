@@ -1,7 +1,13 @@
 "use client";
 
+import { RatingsSection } from "@/app/(app)/stats/ratings-section";
 import { UserAvatar } from "@/components/UserAvatar";
-import { opponentUserIdsForGame, scoresForUser, type GameRow } from "@/lib/game-stats";
+import {
+  type GameRow,
+  opponentUserIdsForGame,
+  scoresForUser,
+} from "@/lib/game-stats";
+import { type PlayerRating } from "@/lib/ratings";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
@@ -28,6 +34,25 @@ type ChartRow = {
   cumulativeWins: number;
   margin: number;
 };
+
+type SportModeRating = PlayerRating & {
+  key: string;
+  sportId: string;
+  sportName: string;
+  gameType: "1v1" | "2v2" | "3v3" | "4v4" | "5v5";
+};
+
+type RatingView = "overall" | string;
+
+type LeaderboardEntry = {
+  userId: string;
+  user: UserRow | null;
+  rank: number;
+  rating: PlayerRating;
+};
+
+const HORIZONTAL_SCROLL_CLASS =
+  "-mx-1 flex gap-2 overflow-x-auto px-1 pb-2 [scrollbar-color:rgba(255,255,255,0.18)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:hover:bg-white/25 [&::-webkit-scrollbar-track]:bg-transparent";
 
 function WinProgressionChart({ data }: { data: ChartRow[] }) {
   return (
@@ -93,11 +118,21 @@ export function StatsClient({
   games,
   userMap,
   userId,
+  overallRating,
+  modeRatings,
+  overallRank,
+  leaderboards,
+  friendIds,
 }: {
   sports: SportRow[];
   games: GameRow[];
   userMap: Record<string, UserRow>;
   userId: string;
+  overallRating: PlayerRating;
+  modeRatings: SportModeRating[];
+  overallRank: number | null;
+  leaderboards: Record<RatingView, LeaderboardEntry[]>;
+  friendIds: string[];
 }) {
   const [selectedSportId, setSelectedSportId] = useState<string | null>(null);
   const [marginOpen, setMarginOpen] = useState(false);
@@ -113,7 +148,12 @@ export function StatsClient({
   );
 
   const totals = useMemo(() => {
-    let wins = 0, losses = 0, ties = 0, pointsFor = 0, pointsAgainst = 0;
+    let wins = 0;
+    let losses = 0;
+    let ties = 0;
+    let pointsFor = 0;
+    let pointsAgainst = 0;
+
     for (const g of filteredGames) {
       const s = scoresForUser(g, userId);
       pointsFor += s.mine;
@@ -122,11 +162,16 @@ export function StatsClient({
       else if (s.lost) losses++;
       else ties++;
     }
+
     return { games: filteredGames.length, wins, losses, ties, pointsFor, pointsAgainst };
   }, [filteredGames, userId]);
 
   const byOpponent = useMemo(() => {
-    const byOpp: Record<string, { wins: number; losses: number; ties: number; pf: number; pa: number }> = {};
+    const byOpp: Record<
+      string,
+      { wins: number; losses: number; ties: number; pf: number; pa: number }
+    > = {};
+
     for (const g of filteredGames) {
       const oppIds = opponentUserIdsForGame(g, userId);
       if (oppIds.length === 0) continue;
@@ -140,9 +185,10 @@ export function StatsClient({
         else byOpp[oid].ties++;
       }
     }
+
     return Object.entries(byOpp)
       .map(([id, v]) => ({ opponent: userMap[id] as UserRow | undefined, ...v }))
-      .sort((a, b) => (b.wins + b.losses + b.ties) - (a.wins + a.losses + a.ties));
+      .sort((a, b) => b.wins + b.losses + b.ties - (a.wins + a.losses + a.ties));
   }, [filteredGames, userId, userMap]);
 
   const chartSeries = useMemo(() => {
@@ -150,7 +196,12 @@ export function StatsClient({
     return filteredGames.map((g, i) => {
       const s = scoresForUser(g, userId);
       if (s.won) winCum++;
-      return { index: i + 1, label: `G${i + 1}`, cumulativeWins: winCum, margin: s.mine - s.theirs };
+      return {
+        index: i + 1,
+        label: `G${i + 1}`,
+        cumulativeWins: winCum,
+        margin: s.mine - s.theirs,
+      };
     });
   }, [filteredGames, userId]);
 
@@ -163,9 +214,17 @@ export function StatsClient({
         </p>
       </div>
 
-      {/* Sport slider */}
+      <RatingsSection
+        userId={userId}
+        overallRating={overallRating}
+        modeRatings={modeRatings}
+        overallRank={overallRank}
+        leaderboards={leaderboards}
+        friendIds={friendIds}
+      />
+
       {sportsWithGames.length > 0 ? (
-        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none">
+        <div className={HORIZONTAL_SCROLL_CLASS}>
           <button
             type="button"
             onClick={() => setSelectedSportId(null)}
@@ -194,7 +253,6 @@ export function StatsClient({
         </div>
       ) : null}
 
-      {/* Head-to-head — primary */}
       <section>
         <h2 className="text-lg font-semibold tracking-tight">Head-to-head</h2>
         <p className="mt-1 text-sm text-muted">
@@ -227,11 +285,11 @@ export function StatsClient({
                     <div className="flex items-center gap-3">
                       <div className="flex items-baseline gap-1 tabular-nums">
                         <span className="text-lg font-bold text-emerald-400">{row.wins}</span>
-                        <span className="text-xs text-muted">–</span>
+                        <span className="text-xs text-muted">-</span>
                         <span className="text-lg font-bold text-rose-400">{row.losses}</span>
                         {row.ties > 0 ? (
                           <>
-                            <span className="text-xs text-muted">–</span>
+                            <span className="text-xs text-muted">-</span>
                             <span className="text-lg font-bold text-foreground">{row.ties}</span>
                           </>
                         ) : null}
@@ -245,7 +303,20 @@ export function StatsClient({
                         </div>
                       </div>
                       {row.opponent ? (
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-muted/50" aria-hidden><path d="m9 18 6-6-6-6"/></svg>
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="shrink-0 text-muted/50"
+                          aria-hidden
+                        >
+                          <path d="m9 18 6-6-6-6" />
+                        </svg>
                       ) : null}
                     </div>
                   </Link>
@@ -256,11 +327,8 @@ export function StatsClient({
         )}
       </section>
 
-      {/* Summary — secondary */}
       <section className="rounded-xl border border-white/10 bg-card p-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
-          Summary
-        </h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Summary</h2>
         <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
           <div>
             <dt className="text-muted">Games</dt>
@@ -280,11 +348,15 @@ export function StatsClient({
           </div>
           <div>
             <dt className="text-muted">Points for</dt>
-            <dd className="text-lg font-semibold tabular-nums text-foreground">{totals.pointsFor}</dd>
+            <dd className="text-lg font-semibold tabular-nums text-foreground">
+              {totals.pointsFor}
+            </dd>
           </div>
           <div>
             <dt className="text-muted">Points against</dt>
-            <dd className="text-lg font-semibold tabular-nums text-foreground">{totals.pointsAgainst}</dd>
+            <dd className="text-lg font-semibold tabular-nums text-foreground">
+              {totals.pointsAgainst}
+            </dd>
           </div>
         </dl>
       </section>
@@ -321,11 +393,27 @@ export function StatsClient({
               <div>
                 <h2 className="text-sm font-semibold text-foreground">Margin per game</h2>
                 <p className="mt-1 text-xs text-muted">
-                  Your score minus opponent (per game). Tap to {marginOpen ? "hide" : "show"} the chart.
+                  Your score minus opponent (per game). Tap to {marginOpen ? "hide" : "show"} the
+                  chart.
                 </p>
               </div>
-              <span className={`shrink-0 text-muted transition-transform ${marginOpen ? "rotate-180" : ""}`} aria-hidden>
-                ▼
+              <span
+                className={`shrink-0 text-muted transition-transform ${marginOpen ? "rotate-180" : ""}`}
+                aria-hidden
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="shrink-0"
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
               </span>
             </button>
             {marginOpen ? (
@@ -336,7 +424,6 @@ export function StatsClient({
           </section>
         </>
       ) : null}
-
     </div>
   );
 }
