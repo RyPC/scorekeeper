@@ -4,7 +4,7 @@ import { getSessionUserId } from "@/lib/auth-server";
 
 import type { GameRow, GameType } from "@/lib/game-stats";
 import { TEAM_SIZE } from "@/lib/game-stats";
-import { fetchGamesVsFriend } from "@/lib/queries";
+import { fetchGamesVsFriend, fetchSportNamesForIds } from "@/lib/queries";
 import { createServiceClient } from "@/lib/supabase/service";
 import { revalidatePath } from "next/cache";
 

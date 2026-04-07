@@ -22,42 +22,137 @@ const SPORT_GAME_TYPES: { pattern: RegExp; types: GameType[] }[] = [
   { pattern: /pickleball/i, types: ["1v1", "2v2"] },
 ];
 
-function PlayerSelect({
+function PlayerPicker({
   name,
   label,
-  users,
+  placeholder = "Select player",
+  recentUsers,
+  allUsers,
   excluded,
   value,
   onChange,
 }: {
   name: string;
   label: string;
-  users: UserRow[];
+  placeholder?: string;
+  recentUsers: UserRow[];
+  allUsers: UserRow[];
   excluded: Set<string>;
   value: string;
   onChange: (id: string) => void;
 }) {
-  const available = users.filter((u) => u.id === value || !excluded.has(u.id));
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  const available = allUsers.filter((u) => u.id === value || !excluded.has(u.id));
+  const recentAvailable = recentUsers.filter((u) => u.id === value || !excluded.has(u.id));
+  const selectedUser = allUsers.find((u) => u.id === value);
+
+  const displayList = search.trim()
+    ? available.filter((u) => u.username.toLowerCase().includes(search.toLowerCase()))
+    : recentAvailable.length > 0
+      ? recentAvailable
+      : available;
+
+  const showRecentLabel = !search.trim() && recentAvailable.length > 0;
+
+  function handleOpen() {
+    setOpen(true);
+    setTimeout(() => searchRef.current?.focus(), 0);
+  }
+
+  function handleSelect(id: string) {
+    onChange(id);
+    setOpen(false);
+    setSearch("");
+  }
+
   return (
-    <div>
+    <div className="relative">
       <label className="text-xs font-medium text-muted">{label}</label>
-      <select
-        name={name}
-        required
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="mt-1 w-full rounded-lg border border-white/10 bg-background px-3 py-2.5 text-sm text-foreground outline-none ring-primary/40 focus:ring-2"
+      <input type="hidden" name={name} value={value} />
+      <button
+        type="button"
+        onClick={handleOpen}
+        className="mt-1 flex w-full items-center justify-between rounded-lg border border-white/10 bg-background px-3 py-2.5 text-sm outline-none ring-primary/40 focus:ring-2"
       >
-        <option value="" disabled>
-          Select player
-        </option>
-        {available.map((u) => (
-          <option key={u.id} value={u.id}>
-            {u.username}
-          </option>
-        ))}
-      </select>
- };
+        {selectedUser ? (
+          <span className="flex items-center gap-2">
+            <UserAvatar
+              username={selectedUser.username}
+              avatarUrl={selectedUser.avatar_url}
+              size="sm"
+            />
+            <span className="text-foreground">{selectedUser.username}</span>
+          </span>
+        ) : (
+          <span className="text-muted">{placeholder}</span>
+        )}
+        <svg
+          className={`h-4 w-4 text-muted transition-transform ${open ? "rotate-180" : ""}`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && (
+        <>
+          <div
+            className="fixed inset-0 z-10"
+            onClick={() => {
+              setOpen(false);
+              setSearch("");
+            }}
+          />
+          <div className="absolute z-20 mt-1 w-full rounded-lg border border-white/10 bg-card shadow-xl">
+            <div className="border-b border-white/10 p-2">
+              <input
+                ref={searchRef}
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search players…"
+                className="w-full rounded-md border border-white/10 bg-background px-3 py-2 text-sm text-foreground outline-none ring-primary/40 placeholder:text-muted focus:ring-2"
+              />
+            </div>
+            <div className="max-h-52 overflow-y-auto">
+              {showRecentLabel && (
+                <p className="px-3 pb-1 pt-2 text-xs text-muted">Recently played</p>
+              )}
+              {displayList.length === 0 ? (
+                <p className="px-3 py-3 text-sm text-muted">No results</p>
+              ) : (
+                displayList.map((u) => (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => handleSelect(u.id)}
+                    className={`flex w-full items-center gap-2 px-3 py-2.5 text-sm hover:bg-white/5 ${
+                      u.id === value ? "text-primary" : "text-foreground"
+                    }`}
+                  >
+                    <UserAvatar
+                      username={u.username}
+                      avatarUrl={u.avatar_url}
+                      size="sm"
+                    />
+                    {u.username}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function SportPicker({
   sports,
   selectedId,
@@ -329,9 +424,6 @@ export function GameForm({
     }
   }, [allowedGameTypes, gameType]);
 
-  // 1v1 opponent
-  const [opponentId, setOpponentId] = useState<string>("");
-
   // Team games: myTeam[0] is always currentUserId, slots 1..teamSize-1 are selected
   // theirTeam[0..teamSize-1] are selected
   const teamSize = TEAM_SIZE[gameType];
@@ -344,7 +436,7 @@ export function GameForm({
   function buildExcluded(skipMySlot?: number, skipTheirSlot?: number): Set<string> {
     const ids = new Set<string>([currentUserId]);
     if (gameType === "1v1") {
-      if (opponentId) ids.add(opponentId);
+      if (selectedOpponentId) ids.add(selectedOpponentId);
     } else {
       for (let i = 1; i < teamSize; i++) {
         if (i !== skipMySlot && myTeamSlots[i - 1]) ids.add(myTeamSlots[i - 1]);
@@ -357,7 +449,12 @@ export function GameForm({
   }
   const [selectedOpponentId, setSelectedOpponentId] = useState<string>("");
 
-  const canSubmit = sports.length > 0 && opponents.length > 0 && !!selectedOpponentId;
+  const playersValid =
+    gameType === "1v1"
+      ? !!selectedOpponentId
+      : myTeamSlots.slice(0, teamSize - 1).every(Boolean) &&
+        theirTeamSlots.slice(0, teamSize).every(Boolean);
+  const canSubmit = sports.length > 0 && opponents.length > 0 && playersValid;
   const blockReason =
     sports.length === 0
       ? "no-sports"
@@ -478,50 +575,19 @@ export function GameForm({
           ))}
         </div>
       </div>
-      <div>
-        <label className="text-xs font-medium text-muted">Opponent</label>
-        {/* hidden input so FormData picks up the selected opponent */}
-        <input type="hidden" name="opponent_id" value={selectedOpponentId} />
-        <OpponentPicker
-          recentOpponents={recentOpponents}
-          allOpponents={opponents}
-          selectedId={selectedOpponentId}
-          onSelect={setSelectedOpponentId}
-          disabled={opponents.length === 0}
-        />
-        {opponents.length === 0 ? (
-          <p className="mt-2 text-xs text-muted">
-            No other users yet. Ask someone else to open this app and tap{" "}
-            <span className="text-foreground">Add new user</span> on the sign-in screen,
-            or sign out and create another profile yourself.
-          </p>
-        ) : null}
-      </div>
-
       {/* Players */}
       {gameType === "1v1" ? (
         <div>
-          <label htmlFor="opponent_id" className="text-xs font-medium text-muted">
-            Opponent
-          </label>
-          <select
-            id="opponent_id"
-            name="opponent_id"
-            required
-            value={opponentId}
-            onChange={(e) => setOpponentId(e.target.value)}
+          <label className="text-xs font-medium text-muted">Opponent</label>
+          {/* hidden input so FormData picks up the selected opponent */}
+          <input type="hidden" name="opponent_id" value={selectedOpponentId} />
+          <OpponentPicker
+            recentOpponents={recentOpponents}
+            allOpponents={opponents}
+            selectedId={selectedOpponentId}
+            onSelect={setSelectedOpponentId}
             disabled={opponents.length === 0}
-            className="mt-1 w-full rounded-lg border border-white/10 bg-background px-3 py-2.5 text-sm text-foreground outline-none ring-primary/40 focus:ring-2 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <option value="" disabled>
-              Select opponent
-            </option>
-            {opponents.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.username}
-              </option>
-            ))}
-          </select>
+          />
           {opponents.length === 0 ? (
             <p className="mt-2 text-xs text-muted">
               No other users yet. Ask someone else to open this app and tap{" "}
@@ -547,11 +613,12 @@ export function GameForm({
                 const slotIndex = i; // myTeamSlots[0..teamSize-2]
                 const excluded = buildExcluded(slotIndex + 1, undefined);
                 return (
-                  <PlayerSelect
+                  <PlayerPicker
                     key={`my_team_${i + 1}`}
                     name={`my_team_${i + 1}`}
                     label={`Teammate ${i + 1}`}
-                    users={allUsers}
+                    recentUsers={recentOpponents}
+                    allUsers={allUsers}
                     excluded={excluded}
                     value={myTeamSlots[slotIndex]}
                     onChange={(id) => {
@@ -576,11 +643,12 @@ export function GameForm({
               {Array.from({ length: teamSize }, (_, i) => {
                 const excluded = buildExcluded(undefined, i);
                 return (
-                  <PlayerSelect
+                  <PlayerPicker
                     key={`their_team_${i}`}
                     name={`their_team_${i}`}
                     label={`Opponent ${i + 1}`}
-                    users={allUsers}
+                    recentUsers={recentOpponents}
+                    allUsers={allUsers}
                     excluded={excluded}
                     value={theirTeamSlots[i]}
                     onChange={(id) => {
@@ -688,28 +756,6 @@ export function GameForm({
       >
         {pending ? "Logging…" : "Log game"}
       </button>
-
-      {opponents.length > 0 && gameType === "1v1" ? (
-        <div className="flex flex-wrap gap-3 border-t border-white/10 pt-4">
-          <p className="w-full text-xs font-medium text-muted">Accounts you can play</p>
-          <div className="flex flex-wrap gap-2">
-            {opponents.slice(0, 12).map((f) => (
-              <div
-                key={f.id}
-                className="flex items-center gap-2 rounded-lg border border-white/10 bg-background/80 px-2 py-1.5"
-              >
-                <UserAvatar username={f.username} avatarUrl={f.avatar_url} size="sm" />
-                <span className="text-xs text-foreground">{f.username}</span>
-              </div>
-            ))}
-            {opponents.length > 12 ? (
-              <span className="self-center text-xs text-muted">
-                +{opponents.length - 12} more
-              </span>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
     </form>
   );
 }
