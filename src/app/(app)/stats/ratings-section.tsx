@@ -119,13 +119,10 @@ export function RatingsSection({
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold tracking-tight">Ratings</h2>
-          <p className="mt-1 text-sm text-muted">
-            Elo-style ratings with reduced movement for repeated matchups.
-          </p>
         </div>
         {overallRank ? (
           <span className="rounded-full border border-white/10 bg-background/60 px-3 py-1 text-xs text-muted">
-            Rank #{overallRank}
+            Rank (Overall) #{overallRank}
           </span>
         ) : null}
       </div>
