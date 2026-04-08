@@ -2,18 +2,17 @@
 
 import { RatingsSection } from "@/app/(app)/stats/ratings-section";
 import { UserAvatar } from "@/components/UserAvatar";
-import {
-  type GameRow,
-  opponentUserIdsForGame,
-  scoresForUser,
-} from "@/lib/game-stats";
+import { type GameRow, opponentUserIdsForGame, scoresForUser } from "@/lib/game-stats";
 import { type PlayerRating } from "@/lib/ratings";
+import { format } from "date-fns";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
   CartesianGrid,
   Line,
   LineChart,
+  ReferenceDot,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -33,6 +32,11 @@ type ChartRow = {
   label: string;
   cumulativeWins: number;
   margin: number;
+  winRate: number;
+  date: string;
+  myScore: number;
+  theirScore: number;
+  result: "W" | "L" | "T";
 };
 
 type SportModeRating = PlayerRating & {
@@ -53,6 +57,97 @@ type LeaderboardEntry = {
 
 const HORIZONTAL_SCROLL_CLASS =
   "-mx-1 flex gap-2 overflow-x-auto px-1 pb-2 [scrollbar-color:rgba(255,255,255,0.18)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:hover:bg-white/25 [&::-webkit-scrollbar-track]:bg-transparent";
+
+function WinRateTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: { payload: ChartRow }[];
+}) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  const resultLabel = d.result === "W" ? "Win" : d.result === "L" ? "Loss" : "Tie";
+  const resultColor =
+    d.result === "W" ? "#4ade80" : d.result === "L" ? "#f87171" : "#b0b0b0";
+
+  return (
+    <div className="rounded-lg border border-white/10 bg-[#1e1e1e] px-3 py-2 text-xs shadow-lg">
+      <p className="font-semibold" style={{ color: resultColor }}>
+        {resultLabel} - {d.myScore}-{d.theirScore}
+      </p>
+      <p className="mt-0.5 text-[#b0b0b0]">{d.date}</p>
+      <p className="mt-1 text-white">
+        Win rate:{" "}
+        <span style={{ color: d.winRate >= 50 ? "#4ade80" : "#f87171" }}>
+          {d.winRate}%
+        </span>
+      </p>
+    </div>
+  );
+}
+
+function WinRateChart({ data }: { data: ChartRow[] }) {
+  if (data.length === 0) return null;
+
+  const maxRate = Math.max(...data.map((d) => d.winRate));
+  const minRate = Math.min(...data.map((d) => d.winRate));
+
+  const peakPoint = maxRate > 50 ? data.find((d) => d.winRate === maxRate) : undefined;
+  const troughPoint = minRate < 50 ? data.find((d) => d.winRate === minRate) : undefined;
+
+  return (
+    <div className="h-52 w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data} margin={{ top: 16, right: 8, bottom: 0, left: -16 }}>
+          <CartesianGrid stroke="#333" strokeDasharray="3 3" />
+          <XAxis
+            dataKey="label"
+            tick={{ fill: "#b0b0b0", fontSize: 10 }}
+            interval="preserveStartEnd"
+          />
+          <YAxis
+            domain={[0, 100]}
+            tickFormatter={(v) => `${v}%`}
+            tick={{ fill: "#b0b0b0", fontSize: 10 }}
+            width={36}
+          />
+          <ReferenceLine y={50} stroke="#555" strokeDasharray="4 4" />
+          <Tooltip content={<WinRateTooltip />} />
+          <Line
+            type="monotone"
+            dataKey="winRate"
+            stroke="#bb86fc"
+            strokeWidth={2}
+            dot={{ r: 3, fill: "#bb86fc", strokeWidth: 0 }}
+            activeDot={{ r: 5 }}
+            name="Win rate"
+          />
+          {peakPoint ? (
+            <ReferenceDot
+              x={peakPoint.label}
+              y={peakPoint.winRate}
+              r={5}
+              fill="#4ade80"
+              stroke="#121212"
+              strokeWidth={1.5}
+            />
+          ) : null}
+          {troughPoint ? (
+            <ReferenceDot
+              x={troughPoint.label}
+              y={troughPoint.winRate}
+              r={5}
+              fill="#f87171"
+              stroke="#121212"
+              strokeWidth={1.5}
+            />
+          ) : null}
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
 
 function WinProgressionChart({ data }: { data: ChartRow[] }) {
   return (
@@ -166,6 +261,8 @@ export function StatsClient({
     return { games: filteredGames.length, wins, losses, ties, pointsFor, pointsAgainst };
   }, [filteredGames, userId]);
 
+  const overallMargin = totals.pointsFor - totals.pointsAgainst;
+
   const byOpponent = useMemo(() => {
     const byOpp: Record<
       string,
@@ -192,15 +289,23 @@ export function StatsClient({
   }, [filteredGames, userId, userMap]);
 
   const chartSeries = useMemo(() => {
-    let winCum = 0;
+    let cumulativeWins = 0;
+
     return filteredGames.map((g, i) => {
       const s = scoresForUser(g, userId);
-      if (s.won) winCum++;
+      if (s.won) cumulativeWins++;
+      const played = i + 1;
+
       return {
-        index: i + 1,
-        label: `G${i + 1}`,
-        cumulativeWins: winCum,
+        index: played,
+        label: `G${played}`,
+        cumulativeWins,
         margin: s.mine - s.theirs,
+        winRate: Math.round((cumulativeWins / played) * 100),
+        date: format(new Date(g.created_at), "MMM d, yyyy"),
+        myScore: s.mine,
+        theirScore: s.theirs,
+        result: (s.won ? "W" : s.lost ? "L" : "T") as "W" | "L" | "T",
       };
     });
   }, [filteredGames, userId]);
@@ -358,8 +463,38 @@ export function StatsClient({
               {totals.pointsAgainst}
             </dd>
           </div>
+          <div>
+            <dt className="text-muted">Overall margin</dt>
+            <dd
+              className={`text-lg font-semibold tabular-nums ${
+                overallMargin > 0
+                  ? "text-emerald-400"
+                  : overallMargin < 0
+                    ? "text-rose-300"
+                    : "text-foreground"
+              }`}
+            >
+              {overallMargin > 0 ? "+" : ""}
+              {overallMargin}
+            </dd>
+          </div>
         </dl>
       </section>
+
+      {chartSeries.length > 0 ? (
+        <section className="rounded-xl border border-white/10 bg-card p-4">
+          <h2 className="text-sm font-semibold text-foreground">Win rate over time</h2>
+          <p className="mt-1 text-xs text-muted">
+            Your win percentage after each game (chronological order).
+          </p>
+          <div className="mt-4">
+            <WinRateChart data={chartSeries} />
+          </div>
+          <p className="mt-2 text-center text-[10px] text-muted">
+            Green dot = personal best - Red dot = lowest point - Dashed line = 50%
+          </p>
+        </section>
+      ) : null}
 
       {chartSeries.length > 0 ? (
         <section className="rounded-xl border border-white/10 bg-card p-4">
@@ -387,7 +522,7 @@ export function StatsClient({
             <button
               type="button"
               onClick={() => setMarginOpen((v) => !v)}
-              className="flex w-full min-h-[44px] items-center justify-between gap-3 text-left"
+              className="flex min-h-[44px] w-full items-center justify-between gap-3 text-left"
               aria-expanded={marginOpen}
             >
               <div>
