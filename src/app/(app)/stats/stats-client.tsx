@@ -30,8 +30,6 @@ type SportRow = { id: string; name: string };
 type ChartRow = {
   index: number;
   label: string;
-  cumulativeWins: number;
-  margin: number;
   winRate: number;
   date: string;
   myScore: number;
@@ -149,64 +147,6 @@ function WinRateChart({ data }: { data: ChartRow[] }) {
   );
 }
 
-function WinProgressionChart({ data }: { data: ChartRow[] }) {
-  return (
-    <div className="h-56 w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data}>
-          <CartesianGrid stroke="#333" strokeDasharray="3 3" />
-          <XAxis dataKey="label" tick={{ fill: "#b0b0b0", fontSize: 11 }} />
-          <YAxis allowDecimals={false} tick={{ fill: "#b0b0b0", fontSize: 11 }} />
-          <Tooltip
-            contentStyle={{
-              background: "#1e1e1e",
-              border: "1px solid rgba(255,255,255,0.1)",
-              borderRadius: 8,
-            }}
-            labelStyle={{ color: "#fff" }}
-          />
-          <Line
-            type="monotone"
-            dataKey="cumulativeWins"
-            stroke="#bb86fc"
-            strokeWidth={2}
-            dot={false}
-            name="Cumulative wins"
-          />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
-function MarginPerGameChart({ data }: { data: ChartRow[] }) {
-  return (
-    <div className="h-56 w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data}>
-          <CartesianGrid stroke="#333" strokeDasharray="3 3" />
-          <XAxis dataKey="label" tick={{ fill: "#b0b0b0", fontSize: 11 }} />
-          <YAxis tick={{ fill: "#b0b0b0", fontSize: 11 }} />
-          <Tooltip
-            contentStyle={{
-              background: "#1e1e1e",
-              border: "1px solid rgba(255,255,255,0.1)",
-              borderRadius: 8,
-            }}
-          />
-          <Line
-            type="monotone"
-            dataKey="margin"
-            stroke="#64b5f6"
-            strokeWidth={2}
-            dot={{ r: 2, fill: "#64b5f6" }}
-            name="Margin"
-          />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
 
 export function StatsClient({
   sports,
@@ -230,7 +170,6 @@ export function StatsClient({
   friendIds: string[];
 }) {
   const [selectedSportId, setSelectedSportId] = useState<string | null>(null);
-  const [marginOpen, setMarginOpen] = useState(false);
 
   const sportsWithGames = useMemo(() => {
     const ids = new Set(games.map((g) => g.sport_id));
@@ -289,19 +228,17 @@ export function StatsClient({
   }, [filteredGames, userId, userMap]);
 
   const chartSeries = useMemo(() => {
-    let cumulativeWins = 0;
+    let wins = 0;
 
     return filteredGames.map((g, i) => {
       const s = scoresForUser(g, userId);
-      if (s.won) cumulativeWins++;
+      if (s.won) wins++;
       const played = i + 1;
 
       return {
         index: played,
         label: `G${played}`,
-        cumulativeWins,
-        margin: s.mine - s.theirs,
-        winRate: Math.round((cumulativeWins / played) * 100),
+        winRate: Math.round((wins / played) * 100),
         date: format(new Date(g.created_at), "MMM d, yyyy"),
         myScore: s.mine,
         theirScore: s.theirs,
@@ -496,69 +433,6 @@ export function StatsClient({
         </section>
       ) : null}
 
-      {chartSeries.length > 0 ? (
-        <section className="rounded-xl border border-white/10 bg-card p-4">
-          <h2 className="text-sm font-semibold text-foreground">Win progression</h2>
-          <p className="mt-1 text-xs text-muted">
-            Cumulative wins across games (chronological order).
-          </p>
-          <div className="mt-4">
-            <WinProgressionChart data={chartSeries} />
-          </div>
-        </section>
-      ) : null}
-
-      {chartSeries.length > 0 ? (
-        <>
-          <section className="hidden rounded-xl border border-white/10 bg-card p-4 md:block">
-            <h2 className="text-sm font-semibold text-foreground">Margin per game</h2>
-            <p className="mt-1 text-xs text-muted">Your score minus opponent (per game).</p>
-            <div className="mt-4">
-              <MarginPerGameChart data={chartSeries} />
-            </div>
-          </section>
-
-          <section className="rounded-xl border border-white/10 bg-card p-4 md:hidden">
-            <button
-              type="button"
-              onClick={() => setMarginOpen((v) => !v)}
-              className="flex min-h-[44px] w-full items-center justify-between gap-3 text-left"
-              aria-expanded={marginOpen}
-            >
-              <div>
-                <h2 className="text-sm font-semibold text-foreground">Margin per game</h2>
-                <p className="mt-1 text-xs text-muted">
-                  Your score minus opponent (per game). Tap to {marginOpen ? "hide" : "show"} the
-                  chart.
-                </p>
-              </div>
-              <span
-                className={`shrink-0 text-muted transition-transform ${marginOpen ? "rotate-180" : ""}`}
-                aria-hidden
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="shrink-0"
-                >
-                  <path d="m6 9 6 6 6-6" />
-                </svg>
-              </span>
-            </button>
-            {marginOpen ? (
-              <div className="mt-4">
-                <MarginPerGameChart data={chartSeries} />
-              </div>
-            ) : null}
-          </section>
-        </>
-      ) : null}
     </div>
   );
 }
