@@ -31,11 +31,11 @@ function SportIcon({ sportName }: { sportName: string }) {
   const normalizedSport = sportName.trim().toLowerCase();
 
   if (normalizedSport === "basketball") {
-    return <text className="text-lg">🏀</text>;
+    return <span className="text-lg">🏀</span>;
   }
 
   if (normalizedSport === "pickleball") {
-    return <text className="text-lg">🥒</text>;
+    return <span className="text-lg">🥒</span>;
   }
 
   return null;
