@@ -14,7 +14,6 @@ export type PlayerRating = {
 
 export type RatingsSnapshot = {
   overall: Record<string, PlayerRating>;
-  byGameType: Record<GameType, Record<string, PlayerRating>>;
   bySportGameType: Record<string, Record<string, PlayerRating>>;
 };
 
@@ -214,18 +213,10 @@ export function calculateRatings(games: GameRow[]): RatingsSnapshot {
   );
 
   const overallContext = createContext();
-  const byGameTypeContext: Record<GameType, MutableContext> = {
-    "1v1": createContext(),
-    "2v2": createContext(),
-    "3v3": createContext(),
-    "4v4": createContext(),
-    "5v5": createContext(),
-  };
   const bySportGameTypeContext = new Map<string, MutableContext>();
 
   for (const game of chronologicalGames) {
     applyGameToContext(overallContext, game);
-    applyGameToContext(byGameTypeContext[game.game_type], game);
     const key = sportGameTypeKey(game.sport_id, game.game_type);
     let context = bySportGameTypeContext.get(key);
     if (!context) {
@@ -237,13 +228,6 @@ export function calculateRatings(games: GameRow[]): RatingsSnapshot {
 
   return {
     overall: finalizeContext(overallContext),
-    byGameType: {
-      "1v1": finalizeContext(byGameTypeContext["1v1"]),
-      "2v2": finalizeContext(byGameTypeContext["2v2"]),
-      "3v3": finalizeContext(byGameTypeContext["3v3"]),
-      "4v4": finalizeContext(byGameTypeContext["4v4"]),
-      "5v5": finalizeContext(byGameTypeContext["5v5"]),
-    },
     bySportGameType: Object.fromEntries(
       [...bySportGameTypeContext.entries()].map(([key, context]) => [key, finalizeContext(context)])
     ),
@@ -296,5 +280,4 @@ export function rankPlayers(ratings: Record<string, PlayerRating>): Array<{
     }));
 }
 
-export const RATED_GAME_TYPES: GameType[] = ["1v1", "2v2", "3v3", "4v4", "5v5"];
 export const RATED_GAME_TYPE_LABELS = GAME_TYPE_LABELS;

@@ -73,7 +73,6 @@ export function RatingsSection({
   const [selectedRatingGameType, setSelectedRatingGameType] = useState<
     SportModeRating["gameType"] | null
   >(null);
-  const [friendsOnlyRatings, setFriendsOnlyRatings] = useState(false);
   const friendIdSet = useMemo(() => new Set(friendIds), [friendIds]);
 
   const ratingSports = useMemo(
@@ -105,14 +104,6 @@ export function RatingsSection({
     [activeRatingView, leaderboards]
   );
 
-  const visibleLeaderboard = useMemo(() => {
-    if (!friendsOnlyRatings) return leaderboard;
-
-    const allowedUserIds = new Set([...friendIds, userId]);
-    return leaderboard
-      .filter((entry) => allowedUserIds.has(entry.userId))
-      .map((entry, index) => ({ ...entry, rank: index + 1 }));
-  }, [friendIds, friendsOnlyRatings, leaderboard, userId]);
 
   return (
     <section className="rounded-xl border border-white/10 bg-card p-4">
@@ -205,18 +196,6 @@ export function RatingsSection({
                 {sport.sportName}
               </button>
             ))}
-            {/* <button
-              type="button"
-              onClick={() => setFriendsOnlyRatings((value) => !value)}
-              aria-pressed={friendsOnlyRatings}
-              className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
-                friendsOnlyRatings
-                  ? "bg-white text-[#121212]"
-                  : "border border-white/15 text-muted hover:border-white/30 hover:text-foreground"
-              }`}
-            >
-              Friends only {friendsOnlyRatings ? "on" : "off"}
-            </button> */}
           </div>
 
           {selectedRatingSportId ? (
@@ -240,14 +219,12 @@ export function RatingsSection({
         </div>
 
         <ul className="mt-4 flex flex-col gap-3">
-          {visibleLeaderboard.length === 0 ? (
+          {leaderboard.length === 0 ? (
             <li className="rounded-xl border border-dashed border-white/15 px-4 py-6 text-sm text-muted">
-              {friendsOnlyRatings
-                ? "No friend ratings available for this format yet."
-                : "No ratings available for this format yet."}
+              No ratings available for this format yet.
             </li>
           ) : (
-            visibleLeaderboard.map(({ user, userId: ratedUserId, rank, rating }) => {
+            leaderboard.map(({ user, userId: ratedUserId, rank, rating }) => {
               const isCurrentUser = ratedUserId === userId;
               const isFriend = friendIdSet.has(ratedUserId);
 
