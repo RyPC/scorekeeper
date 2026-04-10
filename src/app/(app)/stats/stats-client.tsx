@@ -6,7 +6,7 @@ import { type GameRow, opponentUserIdsForGame, scoresForUser } from "@/lib/game-
 import { type PlayerRating } from "@/lib/ratings";
 import { format } from "date-fns";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CartesianGrid,
   Line,
@@ -86,7 +86,11 @@ function WinRateTooltip({
 }
 
 function WinRateChart({ data }: { data: ChartRow[] }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   if (data.length === 0) return null;
+  if (!mounted) return <div className="h-52 w-full" />;
 
   const maxRate = Math.max(...data.map((d) => d.winRate));
   const minRate = Math.min(...data.map((d) => d.winRate));
