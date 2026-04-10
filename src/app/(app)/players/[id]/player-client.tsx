@@ -4,7 +4,7 @@ import { UserAvatar } from "@/components/UserAvatar";
 import { scoresForUser, type GameRow } from "@/lib/game-stats";
 import { format } from "date-fns";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CartesianGrid,
   Line,
@@ -75,7 +75,12 @@ function CustomTooltip({
 }
 
 function H2HChart({ data }: { data: ChartPoint[] }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   if (data.length === 0) return null;
+  if (!mounted) return <div className="h-52 w-full" />;
+
   const maxVal = Math.max(...data.map((d) => d.winRate));
   const minVal = Math.min(...data.map((d) => d.winRate));
   const peakPoint = maxVal > 50 ? data.find((d) => d.winRate === maxVal) : undefined;

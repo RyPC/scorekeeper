@@ -80,7 +80,11 @@ function CustomTooltip({
 }
 
 function H2HChart({ data }: { data: ChartPoint[] }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   if (data.length === 0) return null;
+  if (!mounted) return <div className="h-52 w-full" />;
 
   const maxVal = Math.max(...data.map((d) => d.cumulative));
   const minVal = Math.min(...data.map((d) => d.cumulative));

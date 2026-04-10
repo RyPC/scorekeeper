@@ -1,10 +1,12 @@
 "use client";
 
+import { RatingsSection } from "@/app/(app)/stats/ratings-section";
 import { UserAvatar } from "@/components/UserAvatar";
-import { opponentUserIdsForGame, scoresForUser, type GameRow } from "@/lib/game-stats";
+import { type GameRow, opponentUserIdsForGame, scoresForUser } from "@/lib/game-stats";
+import { type PlayerRating } from "@/lib/ratings";
 import { format } from "date-fns";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CartesianGrid,
   Line,
@@ -35,6 +37,25 @@ type ChartRow = {
   result: "W" | "L" | "T";
 };
 
+type SportModeRating = PlayerRating & {
+  key: string;
+  sportId: string;
+  sportName: string;
+  gameType: "1v1" | "2v2" | "3v3" | "4v4" | "5v5";
+};
+
+type RatingView = "overall" | string;
+
+type LeaderboardEntry = {
+  userId: string;
+  user: UserRow | null;
+  rank: number;
+  rating: PlayerRating;
+};
+
+const HORIZONTAL_SCROLL_CLASS =
+  "-mx-1 flex gap-2 overflow-x-auto px-1 pb-2 [scrollbar-color:rgba(255,255,255,0.18)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:hover:bg-white/25 [&::-webkit-scrollbar-track]:bg-transparent";
+
 function WinRateTooltip({
   active,
   payload,
@@ -47,10 +68,11 @@ function WinRateTooltip({
   const resultLabel = d.result === "W" ? "Win" : d.result === "L" ? "Loss" : "Tie";
   const resultColor =
     d.result === "W" ? "#4ade80" : d.result === "L" ? "#f87171" : "#b0b0b0";
+
   return (
     <div className="rounded-lg border border-white/10 bg-[#1e1e1e] px-3 py-2 text-xs shadow-lg">
       <p className="font-semibold" style={{ color: resultColor }}>
-        {resultLabel} · {d.myScore}–{d.theirScore}
+        {resultLabel} - {d.myScore}-{d.theirScore}
       </p>
       <p className="mt-0.5 text-[#b0b0b0]">{d.date}</p>
       <p className="mt-1 text-white">
@@ -64,7 +86,11 @@ function WinRateTooltip({
 }
 
 function WinRateChart({ data }: { data: ChartRow[] }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   if (data.length === 0) return null;
+  if (!mounted) return <div className="h-52 w-full" />;
 
   const maxRate = Math.max(...data.map((d) => d.winRate));
   const minRate = Math.min(...data.map((d) => d.winRate));
@@ -125,16 +151,27 @@ function WinRateChart({ data }: { data: ChartRow[] }) {
   );
 }
 
+
 export function StatsClient({
   sports,
   games,
   userMap,
   userId,
+  overallRating,
+  modeRatings,
+  overallRank,
+  leaderboards,
+  friendIds,
 }: {
   sports: SportRow[];
   games: GameRow[];
   userMap: Record<string, UserRow>;
   userId: string;
+  overallRating: PlayerRating;
+  modeRatings: SportModeRating[];
+  overallRank: number | null;
+  leaderboards: Record<RatingView, LeaderboardEntry[]>;
+  friendIds: string[];
 }) {
   const [selectedSportId, setSelectedSportId] = useState<string | null>(null);
 
@@ -149,7 +186,12 @@ export function StatsClient({
   );
 
   const totals = useMemo(() => {
-    let wins = 0, losses = 0, ties = 0, pointsFor = 0, pointsAgainst = 0;
+    let wins = 0;
+    let losses = 0;
+    let ties = 0;
+    let pointsFor = 0;
+    let pointsAgainst = 0;
+
     for (const g of filteredGames) {
       const s = scoresForUser(g, userId);
       pointsFor += s.mine;
@@ -158,13 +200,18 @@ export function StatsClient({
       else if (s.lost) losses++;
       else ties++;
     }
+
     return { games: filteredGames.length, wins, losses, ties, pointsFor, pointsAgainst };
   }, [filteredGames, userId]);
 
   const overallMargin = totals.pointsFor - totals.pointsAgainst;
 
   const byOpponent = useMemo(() => {
-    const byOpp: Record<string, { wins: number; losses: number; ties: number; pf: number; pa: number }> = {};
+    const byOpp: Record<
+      string,
+      { wins: number; losses: number; ties: number; pf: number; pa: number }
+    > = {};
+
     for (const g of filteredGames) {
       const oppIds = opponentUserIdsForGame(g, userId);
       if (oppIds.length === 0) continue;
@@ -178,17 +225,20 @@ export function StatsClient({
         else byOpp[oid].ties++;
       }
     }
+
     return Object.entries(byOpp)
       .map(([id, v]) => ({ opponent: userMap[id] as UserRow | undefined, ...v }))
-      .sort((a, b) => (b.wins + b.losses + b.ties) - (a.wins + a.losses + a.ties));
+      .sort((a, b) => b.wins + b.losses + b.ties - (a.wins + a.losses + a.ties));
   }, [filteredGames, userId, userMap]);
 
   const chartSeries = useMemo(() => {
     let wins = 0;
+
     return filteredGames.map((g, i) => {
       const s = scoresForUser(g, userId);
       if (s.won) wins++;
       const played = i + 1;
+
       return {
         index: played,
         label: `G${played}`,
@@ -210,9 +260,17 @@ export function StatsClient({
         </p>
       </div>
 
-      {/* Sport slider */}
+      <RatingsSection
+        userId={userId}
+        overallRating={overallRating}
+        modeRatings={modeRatings}
+        overallRank={overallRank}
+        leaderboards={leaderboards}
+        friendIds={friendIds}
+      />
+
       {sportsWithGames.length > 0 ? (
-        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none">
+        <div className={HORIZONTAL_SCROLL_CLASS}>
           <button
             type="button"
             onClick={() => setSelectedSportId(null)}
@@ -241,7 +299,6 @@ export function StatsClient({
         </div>
       ) : null}
 
-      {/* Head-to-head — primary */}
       <section>
         <h2 className="text-lg font-semibold tracking-tight">Head-to-head</h2>
         <p className="mt-1 text-sm text-muted">
@@ -274,11 +331,11 @@ export function StatsClient({
                     <div className="flex items-center gap-3">
                       <div className="flex items-baseline gap-1 tabular-nums">
                         <span className="text-lg font-bold text-emerald-400">{row.wins}</span>
-                        <span className="text-xs text-muted">–</span>
+                        <span className="text-xs text-muted">-</span>
                         <span className="text-lg font-bold text-rose-400">{row.losses}</span>
                         {row.ties > 0 ? (
                           <>
-                            <span className="text-xs text-muted">–</span>
+                            <span className="text-xs text-muted">-</span>
                             <span className="text-lg font-bold text-foreground">{row.ties}</span>
                           </>
                         ) : null}
@@ -292,7 +349,20 @@ export function StatsClient({
                         </div>
                       </div>
                       {row.opponent ? (
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-muted/50" aria-hidden><path d="m9 18 6-6-6-6"/></svg>
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="shrink-0 text-muted/50"
+                          aria-hidden
+                        >
+                          <path d="m9 18 6-6-6-6" />
+                        </svg>
                       ) : null}
                     </div>
                   </Link>
@@ -303,11 +373,8 @@ export function StatsClient({
         )}
       </section>
 
-      {/* Summary — secondary */}
       <section className="rounded-xl border border-white/10 bg-card p-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
-          Summary
-        </h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Summary</h2>
         <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
           <div>
             <dt className="text-muted">Games</dt>
@@ -327,11 +394,15 @@ export function StatsClient({
           </div>
           <div>
             <dt className="text-muted">Points for</dt>
-            <dd className="text-lg font-semibold tabular-nums text-foreground">{totals.pointsFor}</dd>
+            <dd className="text-lg font-semibold tabular-nums text-foreground">
+              {totals.pointsFor}
+            </dd>
           </div>
           <div>
             <dt className="text-muted">Points against</dt>
-            <dd className="text-lg font-semibold tabular-nums text-foreground">{totals.pointsAgainst}</dd>
+            <dd className="text-lg font-semibold tabular-nums text-foreground">
+              {totals.pointsAgainst}
+            </dd>
           </div>
           <div>
             <dt className="text-muted">Overall margin</dt>
@@ -344,13 +415,13 @@ export function StatsClient({
                     : "text-foreground"
               }`}
             >
-              {overallMargin > 0 ? "+" : ""}{overallMargin}
+              {overallMargin > 0 ? "+" : ""}
+              {overallMargin}
             </dd>
           </div>
         </dl>
       </section>
 
-      {/* Win rate over time */}
       {chartSeries.length > 0 ? (
         <section className="rounded-xl border border-white/10 bg-card p-4">
           <h2 className="text-sm font-semibold text-foreground">Win rate over time</h2>
@@ -361,10 +432,11 @@ export function StatsClient({
             <WinRateChart data={chartSeries} />
           </div>
           <p className="mt-2 text-center text-[10px] text-muted">
-            Green dot = personal best · Red dot = lowest point · Dashed line = 50%
+            Green dot = personal best - Red dot = lowest point - Dashed line = 50%
           </p>
         </section>
       ) : null}
+
     </div>
   );
 }

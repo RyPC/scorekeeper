@@ -6,7 +6,9 @@ import {
   scoresForUser,
   teamForUser,
   type GameRow,
+  type GameType,
 } from "@/lib/game-stats";
+import { RATED_GAME_TYPE_LABELS, type PlayerRating } from "@/lib/ratings";
 import { format } from "date-fns";
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -23,9 +25,17 @@ type Props = {
   games: GameRow[];
   userMap: Record<string, UserRow>;
   friends: UserRow[];
+  overallRating: PlayerRating;
+  ratingChanges: Record<string, number>;
+  bestMode:
+    | (PlayerRating & {
+        sportId: string;
+        sportName: string;
+        gameType: GameType;
+      })
+    | null;
 };
 
-/** Names of all players on the opposing side of `userId` in a game. */
 function opposingNames(game: GameRow, userId: string, userMap: Record<string, UserRow>): string {
   if (game.game_type !== "1v1") {
     const side = teamForUser(game, userId);
@@ -51,6 +61,9 @@ export function DashboardClient({
   games,
   userMap,
   friends,
+  overallRating,
+  ratingChanges,
+  bestMode,
 }: Props) {
   const sportsWithGames = useMemo(() => {
     const sportIdsWithGames = new Set(games.map((g) => g.sport_id));
@@ -98,7 +111,6 @@ export function DashboardClient({
   return (
     <div className="flex flex-col gap-10">
       <section className="overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-card via-card to-primary/[0.07] p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.04)]">
-        {/* User header */}
         <div className="flex min-w-0 gap-4">
           <UserAvatar
             username={currentUser.username}
@@ -110,13 +122,22 @@ export function DashboardClient({
             <h1 className="mt-0.5 text-2xl font-semibold tracking-tight text-foreground">
               {currentUser.username}
             </h1>
+            <div className="mt-3 flex flex-wrap gap-2 text-xs">
+              <span className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-foreground">
+                Rating {overallRating.rating}
+              </span>
+              {bestMode ? (
+                <span className="rounded-full border border-white/10 bg-background/60 px-3 py-1 text-muted">
+                  Best mode: {bestMode.sportName} · {RATED_GAME_TYPE_LABELS[bestMode.gameType]} · {bestMode.rating}
+                </span>
+              ) : null}
+            </div>
           </div>
         </div>
 
-        {/* Sport slider + Head-to-head */}
         <div className="mt-5 border-t border-white/10 pt-5">
           {sportsWithGames.length > 0 ? (
-            <div className="-mx-1 mb-4 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none">
+            <div className="-mx-1 mb-4 flex gap-2 overflow-x-auto px-1 pb-1">
               {sportsWithGames.map((s) => (
                 <button
                   key={s.id}
@@ -167,7 +188,7 @@ export function DashboardClient({
                       <div className="flex items-center gap-3">
                         <div className="flex items-baseline gap-1 tabular-nums">
                           <span className="text-lg font-bold text-emerald-400">{wins}</span>
-                          <span className="text-xs text-muted">–</span>
+                          <span className="text-xs text-muted">-</span>
                           <span className="text-lg font-bold text-rose-400">{losses}</span>
                         </div>
                         <div className="hidden w-14 sm:block">
@@ -178,7 +199,20 @@ export function DashboardClient({
                             />
                           </div>
                         </div>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-muted/50" aria-hidden><path d="m9 18 6-6-6-6"/></svg>
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="shrink-0 text-muted/50"
+                          aria-hidden
+                        >
+                          <path d="m9 18 6-6-6-6" />
+                        </svg>
                       </div>
                     </Link>
                   </li>
@@ -188,7 +222,6 @@ export function DashboardClient({
           )}
         </div>
 
-        {/* Log game */}
         <div className="mt-5 border-t border-white/10 pt-5">
           <Link
             href={activeSportId ? `/games/new?sport=${activeSportId}` : "/games/new"}
@@ -214,7 +247,9 @@ export function DashboardClient({
             {recentGames.map((g) => {
               const s = scoresForUser(g, currentUser.id);
               const oppNames = opposingNames(g, currentUser.id, userMap);
+              const ratingDelta = ratingChanges[g.id] ?? 0;
               const isTeam = g.game_type !== "1v1";
+
               return (
                 <li
                   key={g.id}
@@ -222,9 +257,7 @@ export function DashboardClient({
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="truncate font-medium text-foreground">
-                        vs {oppNames}
-                      </p>
+                      <p className="truncate font-medium text-foreground">vs {oppNames}</p>
                       <p className="text-xs text-muted">
                         {isTeam ? (
                           <span className="mr-1.5 rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide">
@@ -236,10 +269,23 @@ export function DashboardClient({
                     </div>
                     <div className="text-right">
                       <p className="text-lg font-semibold tabular-nums text-foreground">
-                        {s.mine} – {s.theirs}
+                        {s.mine} - {s.theirs}
                       </p>
-                      <p className="text-xs text-muted">
-                        {s.tied ? "Tie" : s.won ? "Win" : "Loss"}
+                      <p className="flex items-center justify-end gap-2 text-xs">
+                        <span className="text-muted">
+                          {s.tied ? "Tie" : s.won ? "Win" : "Loss"}
+                        </span>
+                        <span
+                          className={`tabular-nums ${
+                            ratingDelta > 0
+                              ? "text-emerald-400"
+                              : ratingDelta < 0
+                                ? "text-rose-400"
+                                : "text-muted"
+                          }`}
+                        >
+                          Elo {ratingDelta > 0 ? `+${ratingDelta}` : ratingDelta}
+                        </span>
                       </p>
                     </div>
                   </div>
